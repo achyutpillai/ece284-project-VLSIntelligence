@@ -1,0 +1,53 @@
+# Operating systems
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# Editors/IDEs
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Backup / temp files
+*~
+.*.sw?
+*.swp
+*.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-wheel-metadata/
+htmlcov/
+.coverage
+.pytest_cache/
+
+
+# Jupyter
+.ipynb_checkpoints
+
+# Logs and runtime files
+*.log
+logs/
+tmp/
+temp/
+
+# Versioned data / large outputs
+*.tar.gz
+*.zip
+*.tgz
+*.bak
+
+# Misc
+coverage/
+.archive/
+.env
+.env.local
