@@ -152,7 +152,7 @@ initial begin
     end
 
     // Open Activation File based on mode
-    $sformat(x_file_name, "%s/%s_activation_tile0.txt", input_dir, mode_prefix);
+    $sformat(x_file_name, "%0s/%0s_activation_tile0.txt", input_dir, mode_prefix);
     x_file = $fopen(x_file_name, "r");
     if (x_file == 0) begin
         $display("Error: Could not open %s", x_file_name);
@@ -198,7 +198,7 @@ initial begin
     for (kij=0; kij<len_kij; kij=kij+1) begin  
 
       // Select weight file based on mode
-      $sformat(w_file_name, "%s/%s_weight_itile0_otile0_kij%0d.txt", input_dir, mode_prefix, kij);
+      $sformat(w_file_name, "%0s/%0s_weight_itile0_otile0_kij%0d.txt", input_dir, mode_prefix, kij);
       w_file = $fopen(w_file_name, "r");
       
       if (w_file == 0) begin
@@ -349,8 +349,8 @@ initial begin
 
 
     // ////////// Accumulation & Verification /////////
-    $sformat(out_file_name, "%s/%s_out.txt", input_dir, mode_prefix);
-    $sformat(acc_file_name, "%s/%s_acc.txt", input_dir, mode_prefix);
+    $sformat(out_file_name, "%0s/%0s_out.txt", input_dir, mode_prefix);
+    $sformat(acc_file_name, "%0s/%0s_acc.txt", input_dir, mode_prefix);
 
     out_file = $fopen(out_file_name, "r");  
     acc_file = $fopen(acc_file_name, "r"); 
