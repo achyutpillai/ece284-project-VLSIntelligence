@@ -12,7 +12,7 @@ module core #(
 );
 
 input clk;
-input [33:0] inst;
+input [35:0] inst;
 output ofifo_valid;
 // D_xmem is used as the data input to L0 FIFO. It is loaded with either activation or kernel data from external memory.
 input [bw*row-1:0] D_xmem;
@@ -74,6 +74,20 @@ l0 #(
     .o_ready(l0_ready)
 );
 
+wire [bw*row-1:0] ififo_out; 
+wire ififo_full, ififo_ready, ififo_valid;
+
+fifo_depth64 #(.bw(bw), .width(row)) ififo_inst (
+    .clk(clk),
+    .reset(reset),
+    .rd_en(inst[4]),       // ififo_rd
+    .wr_en(inst[5]),       // ififo_wr
+    .din(l0_macarray_data),// Load from L0
+    .dout(ififo_out),      // Send to North input of Array
+    .full(ififo_full),
+    .empty(ififo_ready)
+);
+
 // MAC array instantiation
 mac_array #(
     .bw(bw),
@@ -85,8 +99,8 @@ mac_array #(
     .reset(reset),
     .out_s(mac_ofifo_wdata),
     .in_w(l0_macarray_data),
-    .in_n(128'b0), 
-    .inst_w(inst[1:0]),    // inst[1]: execute, inst[0]: kernel loading
+    .in_n(ififo_out), 
+    .inst_w({inst[35], inst[1:0]}),    // inst[1]: execute, inst[0]: kernel loading
     .valid(mac_ofifo_wvalid) // write to output fifo whenever valid is high
 );
 
