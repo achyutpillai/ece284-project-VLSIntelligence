@@ -41,7 +41,6 @@ reg load_q = 0;
 reg acc_q = 0;
 reg acc = 0;
 
-// NEW: Mode register for reconfigurability
 // 0 = 4-bit (Vanilla), 1 = 2-bit (SIMD)
 reg mode = 0;
 reg mode_q = 0;
@@ -77,7 +76,7 @@ integer out_file, out_scan_file ; // file_handler
 integer captured_data; 
 integer t, i, j, k, kij;
 integer error;
-integer run_iter; // Loop variable for reconfigurability
+integer run_iter;
 
 
 assign inst_q[33] = acc_q;
@@ -88,8 +87,8 @@ assign inst_q[19]   = CEN_xmem_q;
 assign inst_q[18]   = WEN_xmem_q;
 
 assign inst_q[17:9] = A_xmem_q[10:2];
-assign inst_q[8]    = mode_q; // Mode bit
-assign inst_q[7]    = A_xmem_q[0];    // Map LSB address bit
+assign inst_q[8]    = mode_q;
+assign inst_q[7]    = A_xmem_q[0];
 
 assign inst_q[6]   = ofifo_rd_q;
 assign inst_q[5]   = ififo_wr_q;
@@ -206,6 +205,7 @@ initial begin
          $finish;
       end
 
+      // Remove headers
       w_scan_file = $fscanf(w_file,"%s", captured_data);
       w_scan_file = $fscanf(w_file,"%s", captured_data);
       w_scan_file = $fscanf(w_file,"%s", captured_data);
@@ -444,7 +444,7 @@ always @ (posedge clk) begin
    l0_wr_q    <= l0_wr ;
    execute_q  <= execute;
    load_q     <= load;
-   mode_q     <= mode; // Propagate mode bit
+   mode_q     <= mode;
 end
 
 
