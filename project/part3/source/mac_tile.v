@@ -21,6 +21,7 @@ reg [bw-1:0] b_q;
 reg [psum_bw-1:0] c_q;
 wire [psum_bw-1:0] mac_out;
 reg load_ready_q;
+reg mode_q;  // Track previous mode for flush detection
 
 mac #(.bw(bw), .psum_bw(psum_bw)) mac_instance (
     .a(a_q), 
@@ -40,30 +41,47 @@ always @ (posedge clk) begin
         a_q <= 0;
         b_q <= 0;
         c_q <= 0;
+        mode_q <= 0;
     end
     else begin
         inst_q[1] <= inst_w[1];
+        mode_q <= mode;  // Track mode changes
         
-        // Mode-dependent c_q update
+        // ═══════════════════════════════════════════════════════════════
+        // Mode-dependent c_q update with flush detection
+        // ═══════════════════════════════════════════════════════════════
         if (mode == 1'b1) begin
             // OS Mode: accumulate during execute only
             if (inst_w[1]) begin
                 c_q <= mac_out;
             end
         end
+        else if (mode == 1'b0 && mode_q == 1'b1) begin
+            // Flush phase: OS→WS transition
+            // Keep c_q unchanged so accumulated value can drain via mac_out
+            // (mac_out = 0*weight + c_q = c_q when a_q=0)
+            // Don't update c_q from in_n!
+        end
         else begin
-            // WS Mode: always flow from north
+            // Normal WS Mode: flow from north
             c_q <= in_n;
         end
+        // ═══════════════════════════════════════════════════════════════
         
         // ═══════════════════════════════════════════════════════════════
-        // FIXED: a_q update logic
-        // a_q should ONLY update during EXECUTE, never during LOAD
-        // This is true for BOTH WS and OS modes!
+        // a_q update logic
         // ═══════════════════════════════════════════════════════════════
-        if (inst_w[1]) begin
-            // Only update during execute
-            a_q <= in_w;
+        if (mode == 1'b0) begin
+            // WS Mode: update during load OR execute (original behavior)
+            if (inst_w[1] | inst_w[0]) begin
+                a_q <= in_w;
+            end
+        end
+        else begin
+            // OS Mode: only update during execute, NOT during load
+            if (inst_w[1]) begin
+                a_q <= in_w;
+            end
         end
         // ═══════════════════════════════════════════════════════════════
         
