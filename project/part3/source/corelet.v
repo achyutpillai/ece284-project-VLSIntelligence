@@ -7,7 +7,7 @@ module corelet #(
 )(
     input  clk,
     input  reset,
-    input  [33:0]               inst,
+    input  [34:0]               inst, // CHANGED: Width increased
     input  [bw*row-1:0]         data_in,
     input  [psum_bw*col-1:0]    data_in_acc,
     output [psum_bw*col-1:0]    data_out,
@@ -47,9 +47,10 @@ module corelet #(
         .clk   (clk),
         .reset (reset),
         .out_s (mac_out_s),
-        .in_w  (L0_out),          // weights and inputs from L0
+        .in_w  (L0_out),          
         .in_n  ({psum_bw*col{1'b0}}), // unused 
         .inst_w(inst[1:0]),       // {execute, load}
+        .mode  (inst[34]),        // NEW: Pass mode bit
         .valid (mac_valid)
     );
 
@@ -81,7 +82,7 @@ module corelet #(
     wire [psum_bw*col-1:0] sfp_out;
 
     genvar i;
-	generate
+    generate
     for (i = 0; i < col; i = i + 1) begin : sfp_num
         sfp #(
             .psum_bw(psum_bw)
@@ -93,7 +94,7 @@ module corelet #(
             .data_out  (sfp_out[psum_bw*(i+1)-1 : psum_bw*i])
         );
     end
-	endgenerate
+    endgenerate
 
     assign sfp_data_out = sfp_out;
 

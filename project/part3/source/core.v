@@ -28,7 +28,7 @@ module core #(
 )(
     input clk,
     input reset,    
-    input [33:0] inst,
+    input [34:0] inst, // CHANGED: Width increased to 35 (bit 34 is mode)
     input [bw*row-1:0] D_xmem,
     output ofifo_valid,
     output [psum_bw*col-1:0] sfp_out
