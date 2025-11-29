@@ -1,6 +1,6 @@
 // Created by prof. Mingu Kang @VVIP Lab in UCSD ECE department
 // Please do not spread this code without permission 
-module mac_row (clk, out_s, in_w, in_n, valid, inst_w, mode, reset);
+module mac_row (clk, out_s, in_w, in_n, valid, inst_w, mode, reset); // Added mode
 
   	parameter bw = 4;
   	parameter psum_bw = 16;

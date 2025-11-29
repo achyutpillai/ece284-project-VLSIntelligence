@@ -7,7 +7,7 @@ module corelet #(
 )(
     input  clk,
     input  reset,
-    input  [34:0]               inst, // CHANGED: Width increased
+    input  [34:0]               inst, // CHANGED: Width 35
     input  [bw*row-1:0]         data_in,
     input  [psum_bw*col-1:0]    data_in_acc,
     output [psum_bw*col-1:0]    data_out,
@@ -25,8 +25,8 @@ module corelet #(
         .bw(bw)
     ) L0_inst (
         .clk    (clk),
-        .wr     (inst[2]),    // l0_wr
-        .rd     (inst[3]),    // l0_rd
+        .wr     (inst[2]),
+        .rd     (inst[3]),
         .reset  (reset),
         .in     (data_in),
         .out    (L0_out),
@@ -48,9 +48,9 @@ module corelet #(
         .reset (reset),
         .out_s (mac_out_s),
         .in_w  (L0_out),          
-        .in_n  ({psum_bw*col{1'b0}}), // unused 
-        .inst_w(inst[1:0]),       // {execute, load}
-        .mode  (inst[34]),        // NEW: Pass mode bit
+        .in_n  ({psum_bw*col{1'b0}}), 
+        .inst_w(inst[1:0]),
+        .mode  (inst[34]),        // NEW: Connect Mode Bit
         .valid (mac_valid)
     );
 
@@ -60,13 +60,19 @@ module corelet #(
     wire                   ofifo_o_full;
     wire                   ofifo_o_valid;
 
+    // CRITICAL FIX: Only write to OFIFO if valid AND NOT in OS Mode.
+    // In OS mode (inst[34]=1), we are accumulating internally, output is junk.
+    // In WS/Flush mode (inst[34]=0), we are shifting out valid data.
+    wire ofifo_wr_en;
+    assign ofifo_wr_en = mac_valid & ~inst[34]; 
+
     ofifo #(
         .col    (col),
         .bw(psum_bw)
     ) ofifo_inst (
         .clk   (clk),
         .reset (reset),
-        .wr    (mac_valid),
+        .wr    (ofifo_wr_en), // CHANGED: Gated write
         .rd    (inst[6]),
         .in    (mac_out_s),
         .out   (ofifo_out),
@@ -78,9 +84,8 @@ module corelet #(
     assign data_out    = ofifo_out;
     assign ofifo_valid = ofifo_o_valid;
 
-    // SFP per columns
+    // SFP
     wire [psum_bw*col-1:0] sfp_out;
-
     genvar i;
     generate
     for (i = 0; i < col; i = i + 1) begin : sfp_num
@@ -88,7 +93,7 @@ module corelet #(
             .psum_bw(psum_bw)
         ) sfp_inst (
             .clk  (clk),
-            .acc  (inst[33]),   // accumulate enable
+            .acc  (inst[33]),
             .reset(reset),
             .data_in   (data_in_acc[psum_bw*(i+1)-1 : psum_bw*i]),
             .data_out  (sfp_out[psum_bw*(i+1)-1 : psum_bw*i])

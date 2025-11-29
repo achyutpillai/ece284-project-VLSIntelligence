@@ -1,6 +1,6 @@
 // Created by prof. Mingu Kang @VVIP Lab in UCSD ECE department
 // Please do not spread this code without permission 
-module mac_array (clk, reset, out_s, in_w, in_n, inst_w, mode, valid);
+module mac_array (clk, reset, out_s, in_w, in_n, inst_w, mode, valid); // Added mode
 
   parameter bw = 4;
   parameter psum_bw = 16;
