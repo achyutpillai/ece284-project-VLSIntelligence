@@ -1,6 +1,6 @@
 // Created by prof. Mingu Kang @VVIP Lab in UCSD ECE department
 // Please do not spread this code without permission 
-module mac_tile (clk, out_s, in_w, out_e, in_n, inst_w, inst_e, mode, reset);  // NEW: Added mode
+module mac_tile (clk, out_s, in_w, out_e, in_n, inst_w, inst_e, mode, reset);
 
 parameter bw = 4;
 parameter psum_bw = 16;
@@ -45,19 +45,19 @@ always @ (posedge clk) begin
         inst_q[1] <= inst_w[1];
         
         // ===============================================
-        // CORRECTED RECONFIGURABLE MODE LOGIC
+        // CRITICAL FIX: Mode-dependent c_q update
         // ===============================================
-        if (inst_w[1]) begin  // Only update c_q during execute
-            if (mode) begin
-                // Mode 1 (OS): Accumulate in place
+        if (inst_w[1]) begin  // Only update during execute
+            if (mode == 1'b1) begin
+                // Output Stationary: accumulate in place
                 c_q <= mac_out;
-            end else begin
-                // Mode 0 (WS): Take from north neighbor
+            end 
+            else begin
+                // Weight Stationary: take from north
                 c_q <= in_n;
             end
         end
-        // CRITICAL: No else clause - c_q holds value when not executing!
-        // This prevents accumulated values from being overwritten
+        // IMPORTANT: No else - c_q retains value when not executing
         // ===============================================
         
         if (inst_w[1] | inst_w[0]) begin

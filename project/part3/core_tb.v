@@ -253,7 +253,7 @@ initial begin
         // EXECUTION IN OUTPUT STATIONARY MODE
         // ============================================
         #0.5 clk = 1'b0;
-        mode = 1;      // NEW: Enable OS mode (accumulate in place)
+        mode = 1;      // Enable OS mode (accumulate in place)
         l0_rd = 1;
         #0.5 clk = 1'b1;
 
