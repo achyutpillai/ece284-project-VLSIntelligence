@@ -1,3 +1,5 @@
+// Created by prof. Mingu Kang @VVIP Lab in UCSD ECE department
+// Modified for ECE284 Part 2 Project Requirements
 `timescale 1ns/1ps
 
 module core_tb;
@@ -9,13 +11,12 @@ parameter len_onij = 16;
 parameter col = 8;
 parameter row = 8;
 parameter len_nij = 36;
-parameter len_itile = 1;
-parameter len_otile = 1;
 
 reg clk = 0;
 reg reset = 1;
 
-wire [33:0] inst_q; 
+// Mode bit added to instruction (Index 34)
+wire [34:0] inst_q; 
 
 reg [1:0]  inst_w_q = 0; 
 reg [bw*row-1:0] D_xmem_q = 0;
@@ -40,15 +41,12 @@ reg execute_q = 0;
 reg load_q = 0;
 reg acc_q = 0;
 reg acc = 0;
-
-// 0 = 4-bit (Vanilla), 1 = 2-bit (SIMD)
-reg mode = 0;
+reg mode = 0; 
 reg mode_q = 0;
 
 reg [1:0]  inst_w; 
 reg [bw*row-1:0] D_xmem;
 reg [psum_bw*col-1:0] answer;
-
 
 reg ofifo_rd;
 reg ififo_wr;
@@ -58,372 +56,346 @@ reg l0_wr;
 reg execute;
 reg load;
 
-// String variables for dynamic filenames
-reg [8*64:1] w_file_name;
-reg [8*64:1] x_file_name;
-reg [8*30:1] out_file_name;
-reg [8*30:1] acc_file_name;
-reg [8*30:1] input_dir;
-reg [8*5:1]  mode_prefix;
+// --- DYNAMIC FILE LOADING VARIABLES ---
+reg [8*60:1] data_dir = "data_files/";  // Directory variable
+reg [8*10:1] prefix;                    // Holds "2b_" or "4b_"
+reg [8*128:1] w_file_name;
+reg [8*128:1] x_file_name;
+reg [8*128:1] acc_file_name;
+reg [8*128:1] out_file_name;
+// --------------------------------------
 
 wire ofifo_valid;
 wire [col*psum_bw-1:0] sfp_out;
 
-integer x_file, x_scan_file ; // file_handler
-integer w_file, w_scan_file ; // file_handler
-integer acc_file, acc_scan_file ; // file_handler
-integer out_file, out_scan_file ; // file_handler
+integer x_file, x_scan_file ; 
+integer w_file, w_scan_file ; 
+integer acc_file, acc_scan_file ; 
+integer out_file, out_scan_file ; 
 integer captured_data; 
 integer t, i, j, k, kij;
 integer error;
-integer run_iter;
+integer loop_count; 
 
-
-assign inst_q[33] = acc_q;
-assign inst_q[32] = CEN_pmem_q;
-assign inst_q[31] = WEN_pmem_q;
+assign inst_q[34]   = mode_q; 
+assign inst_q[33]   = acc_q;
+assign inst_q[32]   = CEN_pmem_q;
+assign inst_q[31]   = WEN_pmem_q;
 assign inst_q[30:20] = A_pmem_q;
 assign inst_q[19]   = CEN_xmem_q;
 assign inst_q[18]   = WEN_xmem_q;
-
-assign inst_q[17:9] = A_xmem_q[10:2];
-assign inst_q[8]    = mode_q;
-assign inst_q[7]    = A_xmem_q[0];
-
-assign inst_q[6]   = ofifo_rd_q;
-assign inst_q[5]   = ififo_wr_q;
-assign inst_q[4]   = ififo_rd_q;
-assign inst_q[3]   = l0_rd_q;
-assign inst_q[2]   = l0_wr_q;
-assign inst_q[1]   = execute_q; 
-assign inst_q[0]   = load_q; 
+assign inst_q[17:7] = A_xmem_q;
+assign inst_q[6]    = ofifo_rd_q;
+assign inst_q[5]    = ififo_wr_q;
+assign inst_q[4]    = ififo_rd_q;
+assign inst_q[3]    = l0_rd_q;
+assign inst_q[2]    = l0_wr_q;
+assign inst_q[1]    = execute_q; 
+assign inst_q[0]    = load_q; 
 
 
-core  #(.bw(bw), .col(col), .row(row)) core_instance (
+core #(
+    .bw(bw),
+    .col(col),
+    .row(row)
+) core_instance (
     .clk(clk), 
     .inst(inst_q),
     .ofifo_valid(ofifo_valid),
     .D_xmem(D_xmem_q), 
     .sfp_out(sfp_out), 
-    .reset(reset)); 
-
+    .reset(reset)
+); 
 
 initial begin 
-  $dumpfile("core_tb.vcd");
-  $dumpvars(0,core_tb);
+    inst_w   = 0; 
+    D_xmem   = 0;
+    CEN_xmem = 1;
+    WEN_xmem = 1;
+    A_xmem   = 0;
+    ofifo_rd = 0;
+    ififo_wr = 0;
+    ififo_rd = 0;
+    l0_rd    = 0;
+    l0_wr    = 0;
+    execute  = 0;
+    load     = 0;
+    mode     = 0;
 
-  input_dir = "./data_files";
+    $dumpfile("core_tb.vcd");
+    $dumpvars(0,core_tb);
 
-  inst_w   = 0; 
-  D_xmem   = 0;
-  CEN_xmem = 1;
-  WEN_xmem = 1;
-  A_xmem   = 0;
-  ofifo_rd = 0;
-  ififo_wr = 0;
-  ififo_rd = 0;
-  l0_rd    = 0;
-  l0_wr    = 0;
-  execute  = 0;
-  load     = 0;
-  mode     = 0; // Default 4 bit mode
+    // --- LOOP TWICE: First for 2b, then for 4b ---
+    for (loop_count = 0; loop_count < 2; loop_count = loop_count + 1) begin
 
-  // -------------------------------------------------------------
-  // RECONFIGURABILITY LOOP
-  // Iteration 0: Run 2-bit Mode
-  // Iteration 1: Run 4-bit Mode
-  // -------------------------------------------------------------
-  for (run_iter = 0; run_iter < 2; run_iter = run_iter + 1) begin
+        // -------------------------------------------------------
+        // SETUP PHASE: Define Prefixes and Mode
+        // -------------------------------------------------------
+        if (loop_count == 0) begin
+            $display("###################################################");
+            $display("### STARTING PART 2 CHECK: 2-BIT MODE (Mode=1) ###");
+            $display("###################################################");
+            mode = 1; 
+            prefix = "2b_";
+        end else begin
+            $display("###################################################");
+            $display("### STARTING PART 2 CHECK: 4-BIT MODE (Mode=0) ###");
+            $display("###################################################");
+            mode = 0; 
+            prefix = "4b_";
+        end
 
-    // Configuration Phase
-    if (run_iter == 0) begin
-        $display("#########################################################");
-        $display("### CONFIGURING FOR 2-BIT MODE (SIMD) ###");
-        $display("#########################################################");
-        mode = 1; // Enable SIMD/2-bit mode
-        mode_prefix = "2b"; // Expects files like "2b_activation_tile0.txt"
-    end else begin
-        $display("#########################################################");
-        $display("### CONFIGURING FOR 4-BIT MODE (VANILLA) ###");
-        $display("#########################################################");
-        mode = 0; // Disable SIMD/Enable Vanilla 4-bit
-        mode_prefix = "4b"; // Expects files like "4b_activation_tile0.txt"
-    end
+        // Dynamically construct filenames using data_dir and prefix
+        $sformat(x_file_name,   "%0s%0sactivation_tile0.txt", data_dir, prefix);
+        $sformat(acc_file_name, "%0s%0sacc.txt", data_dir, prefix);
+        $sformat(out_file_name, "%0s%0sout.txt", data_dir, prefix);
 
-    // Open Activation File based on mode
-    $sformat(x_file_name, "%0s/%0s_activation_tile0.txt", input_dir, mode_prefix);
-    x_file = $fopen(x_file_name, "r");
-    if (x_file == 0) begin
-        $display("Error: Could not open %s", x_file_name);
-        $finish;
-    end
+        $display("Loading Activation File: %0s", x_file_name);
+        // -------------------------------------------------------
 
-    // Remove headers
-    x_scan_file = $fscanf(x_file,"%s", captured_data);
-    x_scan_file = $fscanf(x_file,"%s", captured_data);
-    x_scan_file = $fscanf(x_file,"%s", captured_data);
+        x_file = $fopen(x_file_name, "r");
+        if (x_file == 0) begin
+            $display("ERROR: Could not open file %0s", x_file_name);
+            $finish;
+        end
+        
+        // Remove comments
+        x_scan_file = $fscanf(x_file,"%0s", captured_data);
+        x_scan_file = $fscanf(x_file,"%0s", captured_data);
+        x_scan_file = $fscanf(x_file,"%0s", captured_data);
 
-    // //////// Reset core /////////
-    // Note: We reset at the start of EVERY mode change to ensure clean state
-    #0.5 clk = 1'b0;   reset = 1;
-    #0.5 clk = 1'b1; 
+        // Reset Sequence
+        #0.5 clk = 1'b0;   reset = 1;
+        #0.5 clk = 1'b1; 
 
-    for (i=0; i<10 ; i=i+1) begin
-      #0.5 clk = 1'b0;
-      #0.5 clk = 1'b1;  
-    end
+        for (i=0; i<10 ; i=i+1) begin
+            #0.5 clk = 1'b0;
+            #0.5 clk = 1'b1;  
+        end
 
-    #0.5 clk = 1'b0;   reset = 0;
-    #0.5 clk = 1'b1; 
+        #0.5 clk = 1'b0;   reset = 0;
+        #0.5 clk = 1'b1; 
 
-    #0.5 clk = 1'b0;   
-    #0.5 clk = 1'b1;   
-    // /////////////////////////
-
-    // /////// Activation data writing to memory ///////
-    for (t=0; t<len_nij; t=t+1) begin  
-      #0.5 clk = 1'b0;  x_scan_file = $fscanf(x_file,"%32b", D_xmem); WEN_xmem = 0; CEN_xmem = 0; if (t>0) A_xmem = A_xmem + 1;
-      #0.5 clk = 1'b1;   
-    end
-
-    #0.5 clk = 1'b0;  WEN_xmem = 1;  CEN_xmem = 1; A_xmem = 0;
-    #0.5 clk = 1'b1; 
-
-    $fclose(x_file);
-    // /////////////////////////////////////////////////
-
-
-    // WEIGHT LOADING LOOP
-    for (kij=0; kij<len_kij; kij=kij+1) begin  
-
-      // Select weight file based on mode
-      $sformat(w_file_name, "%0s/%0s_weight_itile0_otile0_kij%0d.txt", input_dir, mode_prefix, kij);
-      w_file = $fopen(w_file_name, "r");
-      
-      if (w_file == 0) begin
-         $display("Error: Could not open %s", w_file_name);
-         $finish;
-      end
-
-      // Remove headers
-      w_scan_file = $fscanf(w_file,"%s", captured_data);
-      w_scan_file = $fscanf(w_file,"%s", captured_data);
-      w_scan_file = $fscanf(w_file,"%s", captured_data);
-
-      // Reset
-      #0.5 clk = 1'b0;   reset = 1;
-      #0.5 clk = 1'b1; 
-
-      for (i=0; i<10 ; i=i+1) begin
-        #0.5 clk = 1'b0;
-        #0.5 clk = 1'b1;  
-      end
-
-      #0.5 clk = 1'b0;   reset = 0;
-      #0.5 clk = 1'b1; 
-
-      #0.5 clk = 1'b0;   
-      #0.5 clk = 1'b1;   
-
-      // /////// Kernel data writing to memory ///////
-      A_xmem = 11'b10000000000;
-
-      for (t=0; t<col; t=t+1) begin  
-        #0.5 clk = 1'b0;  w_scan_file = $fscanf(w_file,"%32b", D_xmem); WEN_xmem = 0; CEN_xmem = 0; if (t>0) A_xmem = A_xmem + 1; 
-        #0.5 clk = 1'b1;  
-      end
-
-      #0.5 clk = 1'b0;  WEN_xmem = 1;  CEN_xmem = 1; A_xmem = 0;
-      #0.5 clk = 1'b1; 
-      $fclose(w_file); // Close weight file after reading
-      // /////////////////////////////////////
-
-
-      // /////// Kernel data writing to L0 ///////
-      A_xmem = 11'b10000000000; 
-      CEN_xmem = 0;
-      WEN_xmem = 1;
-      l0_wr = 1;
-
-      for (t=0; t<col; t=t+1) begin
-        #0.5 clk = 1'b0; if(t > 0) A_xmem = A_xmem + 1;
+        #0.5 clk = 1'b0;   
         #0.5 clk = 1'b1;
-      end
 
-      #0.5 clk = 1'b0; l0_wr = 0; CEN_xmem = 0; 
-      #0.5 clk = 1'b1;
-      // /////////////////////////////////////
+        // Activation to xmem 
+        for (t=0; t<len_nij; t=t+1) begin  
+            #0.5 clk = 1'b0;
+            x_scan_file = $fscanf(x_file, "%32b", D_xmem);
+            WEN_xmem = 0;
+            CEN_xmem = 0;
+            if (t>0) A_xmem = A_xmem + 1;
+            #0.5 clk = 1'b1;   
+        end
 
+        #0.5 clk = 1'b0;  WEN_xmem = 1;  CEN_xmem = 1; A_xmem = 0;
+        #0.5 clk = 1'b1; 
 
-      // /////// Kernel loading to PEs ///////
-      // This logic remains the same for both 2-bit and 4-bit
-      // The content of the weight files handles the packing
-      CEN_xmem = 1; WEN_xmem = 1;
+        $fclose(x_file);
 
-      #0.5 clk = 1'b0; load = 1'b1; l0_rd = 1'b1; execute = 1'b0; 
+        for (kij=0; kij<9; kij=kij+1) begin  // kij loop
+            
+            // Generate Weight Filename dynamically
+            $sformat(w_file_name, "%0s%0sweight_itile0_otile0_kij%0d.txt", data_dir, prefix, kij);
+            // $display("Loading Weight File: %0s", w_file_name); // Uncomment for debug
 
-      for (t = 0; t < col; t = t + 1) begin 
-        #0.5 clk = 1'b0;
-        #0.5 clk = 1'b1;
-      end
+            w_file = $fopen(w_file_name, "r");
+            if (w_file == 0) begin
+                $display("ERROR: Could not open file %0s", w_file_name);
+                $finish;
+            end
 
-      #0.5 clk = 1'b0; load = 1'b0; l0_rd = 1'b0;
-      #0.5 clk = 1'b1;
-      // /////////////////////////////////////
+            w_scan_file = $fscanf(w_file,"%0s", captured_data);
+            w_scan_file = $fscanf(w_file,"%0s", captured_data);
+            w_scan_file = $fscanf(w_file,"%0s", captured_data);
+
+            #0.5 clk = 1'b0;    reset = 1;
+            #0.5 clk = 1'b1; 
+
+            for (i=0; i<10 ; i=i+1) begin
+                #0.5 clk = 1'b0;
+                #0.5 clk = 1'b1;  
+            end
+
+            #0.5 clk = 1'b0;    reset = 0;
+            #0.5 clk = 1'b1; 
+
+            #0.5 clk = 1'b0;   
+            #0.5 clk = 1'b1;   
+
+            // Kernel to xmem 
+            A_xmem = 11'b10000000000;
+
+            for (t=0; t<col; t=t+1) begin  
+                #0.5 clk = 1'b0;
+                w_scan_file = $fscanf(w_file,"%32b", D_xmem);
+                WEN_xmem = 0;
+                CEN_xmem = 0;
+                if (t>0) A_xmem = A_xmem + 1; 
+                #0.5 clk = 1'b1;  
+            end
+
+            #0.5 clk = 1'b0;  WEN_xmem = 1;  CEN_xmem = 1; A_xmem = 0;
+            #0.5 clk = 1'b1; 
+
+            // Kernel from xmem to L0
+            WEN_xmem = 1;
+            CEN_xmem = 0;
+            l0_wr = 1;
+            l0_rd = 0;
+            A_xmem = 11'b10000000000;
+
+            for (i=0; i<col; i=i+1) begin
+                #0.5 clk = 1'b0;
+                if (t>0) A_xmem = A_xmem + 1; 
+                #0.5 clk = 1'b1; 
+            end
+
+            #0.5 clk = 1'b0;
+            l0_wr = 0;
+            #0.5 clk = 1'b1;
+
+            // Kernel from L0 to PEs
+            #0.5 clk = 1'b0;
+            l0_rd = 1;
+            #0.5 clk = 1'b1;
+
+            for (i=0; i<col; i=i+1) begin
+                #0.5 clk = 1'b0;
+                load = 1;
+                #0.5 clk = 1'b1; 
+            end
+
+            #0.5 clk = 1'b0;  load = 0; l0_rd = 0;
+            #0.5 clk = 1'b1;  
+          
+            // Activation data from xmem to L0 
+            WEN_xmem = 1;
+            CEN_xmem = 0;
+            l0_wr = 1;
+            l0_rd = 0;
+            A_xmem = 0;
+
+            for (i=0; i<len_nij; i=i+1) begin
+                #0.5 clk = 1'b0;
+                if (t>0) A_xmem = A_xmem + 1; 
+                #0.5 clk = 1'b1; 
+            end
+
+            #0.5 clk = 1'b0;
+            l0_wr = 0;
+            #0.5 clk = 1'b1;
+
+            // Execution start
+            #0.5 clk = 1'b0;
+            l0_rd = 1;
+            #0.5 clk = 1'b1;
+
+            for (i=0; i<len_nij+row+col; i=i+1) begin
+                #0.5 clk = 1'b0;
+                execute = 1;
+                #0.5 clk = 1'b1; 
+            end
+
+            // Stop execution 
+            #0.5 clk = 1'b0;  execute = 0; l0_rd = 0;
+            #0.5 clk = 1'b1;  
+
+            // OFIFO read and p_mem write
+            #0.5 clk = 1'b0;
+            ofifo_rd = 1;
+            #0.5 clk = 1'b1;
+
+            #0.5 clk = 1'b0;
+            WEN_pmem = 0;
+            CEN_pmem = 0;   
+            #0.5 clk = 1'b1;
+
+            for (t=0; t<len_nij; t=t+1) begin  
+                #0.5 clk = 1'b0;
+                A_pmem = A_pmem + 1; 
+                #0.5 clk = 1'b1;  
+            end
+
+            #0.5 clk = 1'b0;  WEN_pmem = 1;  CEN_pmem = 1; ofifo_rd = 0;
+            #0.5 clk = 1'b1; 
+            
+        end  // end of kij loop
+
+        // Accumulation
+        acc_file = $fopen(acc_file_name, "r"); 
+        out_file = $fopen(out_file_name, "r"); 
+
+        if (acc_file == 0) begin $display("ERROR: Missing %0s", acc_file_name); $finish; end
+        if (out_file == 0) begin $display("ERROR: Missing %0s", out_file_name); $finish; end
+
+        error = 0;
+
+        $display("############ Verification Start during accumulation #############"); 
+
+        for (i=0; i<len_onij+1; i=i+1) begin 
+
+            #0.5 clk = 1'b0; 
+            #0.5 clk = 1'b1; 
+
+            if (i>0) begin
+                out_scan_file = $fscanf(out_file,"%128b", answer); 
+                if (sfp_out == answer)
+                    $display("Output featuremap Data number %2d matched! :D", i); 
+                else begin
+                    $display("Output featuremap Data number %2d ERROR!!", i); 
+                    $display("sfpout: %128b", sfp_out);
+                    $display("answer: %128b", answer);
+                    error = 1;
+                end
+            end
+           
+            #0.5 clk = 1'b0; reset = 1;
+            #0.5 clk = 1'b1;  
+            #0.5 clk = 1'b0; reset = 0; 
+            #0.5 clk = 1'b1;  
+
+            for (j=0; j<len_kij+1; j=j+1) begin 
+                #0.5 clk = 1'b0;    
+                if (j<len_kij) begin
+                    CEN_pmem = 0;
+                    WEN_pmem = 1;
+                    acc_scan_file = $fscanf(acc_file,"%11b", A_pmem);
+                end
+                else begin
+                    CEN_pmem = 1;
+                    WEN_pmem = 1;
+                end
+                if (j>0)  acc = 1;  
+                #0.5 clk = 1'b1;    
+            end
+
+            #0.5 clk = 1'b0; acc = 0;
+            #0.5 clk = 1'b1; 
+        end
+
+        if (error == 0) begin
+            if (loop_count == 0) $display("############ 2-BIT MODE PASSED ##############"); 
+            else                 $display("############ 4-BIT MODE PASSED ##############"); 
+        end else begin
+            $display("############ ERROR DETECTED - STOPPING ##############");
+            $finish;
+        end
+
+        $fclose(acc_file);
+        $fclose(out_file);
     
+    end // End of loop_count (Run both modes)
 
-      // ////// Intermission /////
-      #0.5 clk = 1'b0;  load = 0; l0_rd = 0;
-      #0.5 clk = 1'b1;  
-    
-      for (i=0; i<10 ; i=i+1) begin
-        #0.5 clk = 1'b0;
+    $display("########### Project Part 2 Completed !! ############"); 
+
+    for (t=0; t<10; t=t+1) begin  
+        #0.5 clk = 1'b0;  
         #0.5 clk = 1'b1;  
-      end
-      // /////////////////////////////////////
-
-
-      // /////// Activation data writing to L0 ///////
-      #0.5 clk = 1'b0; l0_wr = 1;  CEN_xmem = 0; WEN_xmem = 1; A_xmem = 0; 
-
-      for (t=0; t<len_nij; t=t+1) begin
-        #0.5 clk = 1'b0; if(t > 0) A_xmem = A_xmem + 1;
-        #0.5 clk = 1'b1;
-      end
-
-      #0.5 clk = 1'b0; l0_wr = 0; CEN_xmem = 1; 
-      #0.5 clk = 1'b1;
-      // /////////////////////////////////////
-
-
-      // /////// Execution ///////
-      #0.5 clk = 1'b0; 
-        l0_rd    = 1'b1;   
-        ififo_wr = 1'b1;   
-        execute  = 1'b0;   
-        ififo_rd = 1'b0;
-      #0.5 clk = 1'b1;
-
-      for (t = 0; t < len_nij; t = t + 1) begin
-        #0.5 clk = 1'b0; 
-        #0.5 clk = 1'b1;
-      end
-
-      #0.5 clk = 1'b0;
-        l0_rd    = 1'b0;
-        ififo_wr = 1'b0;
-      #0.5 clk = 1'b1;
-
-      #0.5 clk = 1'b0;
-        execute  = 1'b1;   
-        ififo_rd = 1'b1;   
-      #0.5 clk = 1'b1;
-
-      for (t = 0; t < len_nij + col + row; t = t + 1) begin
-        #0.5 clk = 1'b0;
-        #0.5 clk = 1'b1;
-      end
-
-      #0.5 clk = 1'b0;
-        execute  = 1'b0;
-        ififo_rd = 1'b0;
-      #0.5 clk = 1'b1;
-    
-      // /////////////////////////////////////
-
-
-      // //////// OFIFO READ ////////
-      for (t = 0; t < len_onij; t = t + 1) begin
-        #0.5 clk = 1'b0;
-          ofifo_rd = 1'b1;       
-        #0.5 clk = 1'b1;
-      end
-
-      #0.5 clk = 1'b0;
-        ofifo_rd = 1'b0;
-      #0.5 clk = 1'b1;
-      // /////////////////////////////////////
-
-
-    end  // end of kij loop
-
-
-    // ////////// Accumulation & Verification /////////
-    $sformat(out_file_name, "%0s/%0s_out.txt", input_dir, mode_prefix);
-    $sformat(acc_file_name, "%0s/%0s_acc.txt", input_dir, mode_prefix);
-
-    out_file = $fopen(out_file_name, "r");  
-    acc_file = $fopen(acc_file_name, "r"); 
-
-    if (out_file == 0 || acc_file == 0) begin
-        $display("Error: Could not open output or acc files for %s", mode_prefix);
-        $finish;
     end
 
-    out_scan_file = $fscanf(out_file,"%s", answer); 
-    out_scan_file = $fscanf(out_file,"%s", answer); 
-    out_scan_file = $fscanf(out_file,"%s", answer); 
-
-    error = 0;
-
-    $display("############ Verification Start for %s mode #############", mode_prefix); 
-
-    for (i=0; i<len_onij+1; i=i+1) begin 
-
-      #0.5 clk = 1'b0; 
-      #0.5 clk = 1'b1; 
-
-      if (i>0) begin
-       out_scan_file = $fscanf(out_file,"%128b", answer); 
-         if (sfp_out == answer)
-           $display("%2d-th output featuremap Data matched! :D", i); 
-         else begin
-           $display("%2d-th output featuremap Data ERROR!!", i); 
-           $display("sfpout: %128b", sfp_out);
-           $display("answer: %128b", answer);
-           error = 1;
-         end
-      end
-     
-      #0.5 clk = 1'b0; reset = 1;
-      #0.5 clk = 1'b1;  
-      #0.5 clk = 1'b0; reset = 0; 
-      #0.5 clk = 1'b1;  
-
-      for (j=0; j<len_kij+1; j=j+1) begin 
-        #0.5 clk = 1'b0;    
-          if (j<len_kij) begin CEN_pmem = 0; WEN_pmem = 1; acc_scan_file = $fscanf(acc_file,"%11b", A_pmem); end
-                         else  begin CEN_pmem = 1; WEN_pmem = 1; end
-
-          if (j>0)  acc = 1;  
-        #0.5 clk = 1'b1;    
-      end
-
-      #0.5 clk = 1'b0; acc = 0;
-      #0.5 clk = 1'b1; 
-    end
-
-
-    if (error == 0) begin
-      $display("############ No error detected for %s mode ##############", mode_prefix); 
-    end else begin
-      $display("############ FAILED: Errors in %s mode ##############", mode_prefix); 
-    end
-
-    $fclose(acc_file);
-    $fclose(out_file);
-    // //////////////////////////////////
-
-  end // END OF RECONFIGURABILITY LOOP
-
-  $display("########### TB Completed ############"); 
-  
-  for (t=0; t<10; t=t+1) begin  
-    #0.5 clk = 1'b0;  
-    #0.5 clk = 1'b1;  
-  end
-
-  #10 $finish;
+    #10 $finish;
 
 end
 
@@ -444,8 +416,7 @@ always @ (posedge clk) begin
    l0_wr_q    <= l0_wr ;
    execute_q  <= execute;
    load_q     <= load;
-   mode_q     <= mode;
+   mode_q     <= mode; 
 end
-
 
 endmodule

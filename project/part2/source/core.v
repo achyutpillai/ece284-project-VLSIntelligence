@@ -12,8 +12,8 @@ module core #(
 );
 
 input clk;
-input [33:0] inst;
-wire  mode_2b = inst[8]; // 1 = 2-bit, 0 = vanilla 4-bit
+input [34:0] inst;
+wire  mode_2b = inst[34]; // 1 = 2-bit, 0 = vanilla 4-bit
 output ofifo_valid;
 // D_xmem is used as the data input to L0 FIFO. It is loaded with either activation or kernel data from external memory.
 input [bw*row-1:0] D_xmem;
@@ -154,7 +154,7 @@ end
 assign xmem_din   = D_xmem;
 assign xmem_cen   = inst[19];
 assign xmem_wen   = inst[18];
-assign xmem_addr = {inst[17:9], 1'b0, inst[7]};  // A[10:2], A[1]=0, A[0]
+assign xmem_addr = inst[17:7];
 
 // Instantiate xmem (activation/kernel memory, bw*row bits wide, using sram_32b_w2048 banks)
 for (i = 0; i < (bw*row+31)/32; i = i + 1) begin : xmem_instantiation
