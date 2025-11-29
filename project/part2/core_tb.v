@@ -344,7 +344,7 @@ initial begin
 
         $display("############ Verification Start during accumulation #############"); 
 
-        for (i=0; i<len_onij+1; i=i+1) begin 
+        for (i=0; i<(mode ? 2*len_onij+1 : len_onij+1); i=i+1) begin 
 
             #0.5 clk = 1'b0; 
             #0.5 clk = 1'b1; 
