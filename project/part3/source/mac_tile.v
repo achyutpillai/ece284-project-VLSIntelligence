@@ -50,29 +50,20 @@ always @ (posedge clk) begin
             if (inst_w[1]) begin
                 c_q <= mac_out;
             end
-            // else: c_q holds its accumulated value
         end
         else begin
-            // WS Mode: always flow from north (original behavior)
+            // WS Mode: always flow from north
             c_q <= in_n;
         end
         
         // ═══════════════════════════════════════════════════════════════
-        // CRITICAL: a_q update logic
-        // In WS mode: a_q updates during both load and execute (original)
-        // In OS mode: a_q should ONLY update during execute!
+        // FIXED: a_q update logic
+        // a_q should ONLY update during EXECUTE, never during LOAD
+        // This is true for BOTH WS and OS modes!
         // ═══════════════════════════════════════════════════════════════
-        if (mode == 1'b0) begin
-            // WS Mode: original behavior - update during load OR execute
-            if (inst_w[1] | inst_w[0]) begin
-                a_q <= in_w;
-            end
-        end
-        else begin
-            // OS Mode: only update during execute, NOT during load
-            if (inst_w[1]) begin
-                a_q <= in_w;
-            end
+        if (inst_w[1]) begin
+            // Only update during execute
+            a_q <= in_w;
         end
         // ═══════════════════════════════════════════════════════════════
         
