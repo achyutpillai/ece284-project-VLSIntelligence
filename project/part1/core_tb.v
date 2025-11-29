@@ -11,8 +11,6 @@ parameter len_onij = 16;
 parameter col = 8;
 parameter row = 8;
 parameter len_nij = 36;
-parameter len_itile = 1;
-parameter len_otile = 1;
 
 reg clk = 0;
 reg reset = 1;
@@ -84,259 +82,212 @@ assign inst_q[1]   = execute_q;
 assign inst_q[0]   = load_q; 
 
 
-core  #(.bw(bw), .col(col), .row(row)) core_instance (
+core #(
+	.bw(bw),
+	.col(col),
+	.row(row)
+) core_instance (
 	.clk(clk), 
 	.inst(inst_q),
 	.ofifo_valid(ofifo_valid),
-  .D_xmem(D_xmem_q), 
-  .sfp_out(sfp_out), 
-	.reset(reset)); 
-
+    .D_xmem(D_xmem_q), 
+    .sfp_out(sfp_out), 
+	.reset(reset)
+); 
 
 initial begin 
 
-  inst_w   = 0; 
-  D_xmem   = 0;
-  CEN_xmem = 1;
-  WEN_xmem = 1;
-  A_xmem   = 0;
-  ofifo_rd = 0;
-  ififo_wr = 0;
-  ififo_rd = 0;
-  l0_rd    = 0;
-  l0_wr    = 0;
-  execute  = 0;
-  load     = 0;
+	inst_w   = 0; 
+	D_xmem   = 0;
+	CEN_xmem = 1;
+	WEN_xmem = 1;
+	A_xmem   = 0;
+	ofifo_rd = 0;
+	ififo_wr = 0;
+	ififo_rd = 0;
+	l0_rd    = 0;
+	l0_wr    = 0;
+	execute  = 0;
+	load     = 0;
 
-  $dumpfile("core_tb.vcd");
-  $dumpvars(0,core_tb);
+	$dumpfile("core_tb.vcd");
+	$dumpvars(0,core_tb);
 
-  x_file = $fopen("activation_tile0.txt", "r");
+  	x_file = $fopen("activation_tile0.txt", "r");
+  	// Following three lines are to remove the first three comment lines of the file
+  	x_scan_file = $fscanf(x_file,"%s", captured_data);
+  	x_scan_file = $fscanf(x_file,"%s", captured_data);
+  	x_scan_file = $fscanf(x_file,"%s", captured_data);
 
-  // Following three lines are to remove the first three comment lines of the file
-  x_scan_file = $fscanf(x_file,"%s", captured_data);
-  x_scan_file = $fscanf(x_file,"%s", captured_data);
-  x_scan_file = $fscanf(x_file,"%s", captured_data);
+	// Reset
+  	#0.5 clk = 1'b0;   reset = 1;
+  	#0.5 clk = 1'b1; 
 
-  //////// Reset core /////////
-  #0.5 clk = 1'b0;   reset = 1;
-  #0.5 clk = 1'b1; 
+	for (i=0; i<10 ; i=i+1) begin
+    	#0.5 clk = 1'b0;
+    	#0.5 clk = 1'b1;  
+  	end
 
-  // Pass 10 clock cycles to allow reset to propagate
-  for (i=0; i<10 ; i=i+1) begin
-    #0.5 clk = 1'b0;
-    #0.5 clk = 1'b1;  
-  end
+	#0.5 clk = 1'b0;	reset = 0;
+  	#0.5 clk = 1'b1; 
 
-  // Clear reset 
-  #0.5 clk = 1'b0;   reset = 0;
-  #0.5 clk = 1'b1; 
+  	#0.5 clk = 1'b0;   
+  	#0.5 clk = 1'b1;
 
-  // Give it a cycle 
-  #0.5 clk = 1'b0;   
-  #0.5 clk = 1'b1;   
-  /////////////////////////
+  	// Activation to xmem 
+  	for (t=0; t<len_nij; t=t+1) begin  
+  		#0.5 clk = 1'b0;
+		x_scan_file = $fscanf(x_file, "%32b", D_xmem);
+		WEN_xmem = 0;
+		CEN_xmem = 0;
+		if (t>0) A_xmem = A_xmem + 1;
+  		#0.5 clk = 1'b1;   
+  	end
 
-  /////// Activation data writing to memory ///////
+	#0.5 clk = 1'b0;  WEN_xmem = 1;  CEN_xmem = 1; A_xmem = 0;
+	#0.5 clk = 1'b1; 
 
-  // Write all activations to memory
-  for (t=0; t<len_nij; t=t+1) begin  
-    #0.5 clk = 1'b0;  x_scan_file = $fscanf(x_file,"%32b", D_xmem); WEN_xmem = 0; CEN_xmem = 0; if (t>0) A_xmem = A_xmem + 1;
-    #0.5 clk = 1'b1;   
-  end
+	$fclose(x_file);
 
-  // Disable memory and zero input
-  #0.5 clk = 1'b0;  WEN_xmem = 1;  CEN_xmem = 1; A_xmem = 0;
-  #0.5 clk = 1'b1; 
+	for (kij=0; kij<9; kij=kij+1) begin  // kij loop
+		case(kij)
+     		0: w_file_name = "weight_itile0_otile0_kij0.txt";
+     		1: w_file_name = "weight_itile0_otile0_kij1.txt";
+    		2: w_file_name = "weight_itile0_otile0_kij2.txt";
+    		3: w_file_name = "weight_itile0_otile0_kij3.txt";
+    		4: w_file_name = "weight_itile0_otile0_kij4.txt";
+    		5: w_file_name = "weight_itile0_otile0_kij5.txt";
+    		6: w_file_name = "weight_itile0_otile0_kij6.txt";
+    		7: w_file_name = "weight_itile0_otile0_kij7.txt";
+    		8: w_file_name = "weight_itile0_otile0_kij8.txt";
+    	endcase
 
-  $fclose(x_file);
-  /////////////////////////////////////////////////
+    	w_file = $fopen(w_file_name, "r");
+    	// Following three lines are to remove the first three comment lines of the file
+    	w_scan_file = $fscanf(w_file,"%s", captured_data);
+    	w_scan_file = $fscanf(w_file,"%s", captured_data);
+    	w_scan_file = $fscanf(w_file,"%s", captured_data);
 
+    	#0.5 clk = 1'b0;	reset = 1;
+    	#0.5 clk = 1'b1; 
 
-  // WEIGHT LOADING one pixel at a time
-  for (kij=0; kij<len_kij; kij=kij+1) begin  // kij loop
+    	for (i=0; i<10 ; i=i+1) begin
+      		#0.5 clk = 1'b0;
+      		#0.5 clk = 1'b1;  
+    	end
 
-    // Select the weight file
-    $sformat(w_file_name, "weight_itile0_otile0_kij%0d.txt", kij);
-    w_file = $fopen(w_file_name, "r");
-    
-    // Following three lines are to remove the first three comment lines of the file
-    w_scan_file = $fscanf(w_file,"%s", captured_data);
-    w_scan_file = $fscanf(w_file,"%s", captured_data);
-    w_scan_file = $fscanf(w_file,"%s", captured_data);
+    	#0.5 clk = 1'b0;	reset = 0;
+    	#0.5 clk = 1'b1; 
 
-    // Reset
-    #0.5 clk = 1'b0;   reset = 1;
-    #0.5 clk = 1'b1; 
+    	#0.5 clk = 1'b0;   
+    	#0.5 clk = 1'b1;   
 
-    for (i=0; i<10 ; i=i+1) begin
-      #0.5 clk = 1'b0;
-      #0.5 clk = 1'b1;  
-    end
+    	// Kernel to xmem 
+    	A_xmem = 11'b10000000000;
 
-    #0.5 clk = 1'b0;   reset = 0;
-    #0.5 clk = 1'b1; 
+    	for (t=0; t<col; t=t+1) begin  
+      		#0.5 clk = 1'b0;
+			w_scan_file = $fscanf(w_file,"%32b", D_xmem);
+			WEN_xmem = 0;
+			CEN_xmem = 0;
+			if (t>0) A_xmem = A_xmem + 1; 
+      		#0.5 clk = 1'b1;  
+    	end
 
-    #0.5 clk = 1'b0;   
-    #0.5 clk = 1'b1;   
+    	#0.5 clk = 1'b0;  WEN_xmem = 1;  CEN_xmem = 1; A_xmem = 0;
+    	#0.5 clk = 1'b1; 
 
-    /////// Kernel data writing to memory ///////
+    	// Kernel from xmem to L0
+		WEN_xmem = 1;
+		CEN_xmem = 0;
+		l0_wr = 1;
+		l0_rd = 0;
+		A_xmem = 11'b10000000000;
 
-    // Init mem 
-    A_xmem = 11'b10000000000;
+		for (i=0; i<col; i=i+1) begin
+			#0.5 clk = 1'b0;
+			if (t>0) A_xmem = A_xmem + 1; 
+			#0.5 clk = 1'b1; 
+		end
 
-    // Write kernel weights in successive addresses 
-    for (t=0; t<col; t=t+1) begin  
-      #0.5 clk = 1'b0;  w_scan_file = $fscanf(w_file,"%32b", D_xmem); WEN_xmem = 0; CEN_xmem = 0; if (t>0) A_xmem = A_xmem + 1; 
-      #0.5 clk = 1'b1;  
-    end
+		#0.5 clk = 1'b0;
+		l0_wr = 0;
+		#0.5 clk = 1'b1;
 
-    // Stop writing
-    #0.5 clk = 1'b0;  WEN_xmem = 1;  CEN_xmem = 1; A_xmem = 0;
-    #0.5 clk = 1'b1; 
-    /////////////////////////////////////
+    	// Kernel from L0 to PEs
+		#0.5 clk = 1'b0;
+		l0_rd = 1;
+		#0.5 clk = 1'b1;
 
+		for (i=0; i<col; i=i+1) begin
+			#0.5 clk = 1'b0;
+			load = 1;
+			#0.5 clk = 1'b1; 
+		end
 
-
-    /////// Kernel data writing to L0 ///////
-    A_xmem = 11'b10000000000; // Kernel base memory address
-
-    // Put xmem into READ mode
-    CEN_xmem = 0;
-    WEN_xmem = 1;
-
-    // Tell core to write from xmem into L0
-    l0_wr = 1;
-
-    // Write kernel data from xmem into L0
-    for (t=0; t<col; t=t+1) begin
-      #0.5 clk = 1'b0; if(t > 0) A_xmem = A_xmem + 1;
-      #0.5 clk = 1'b1;
-    end
-
-    #0.5 clk = 1'b0; l0_wr = 0; CEN_xmem = 0; // Disable write to L0
-    #0.5 clk = 1'b1;
-    /////////////////////////////////////
-
-
-    /////// Kernel loading to PEs ///////
-    CEN_xmem = 1; WEN_xmem = 1;
-
-    #0.5 clk = 1'b0; load = 1'b1; l0_rd = 1'b1; execute = 1'b0; // Tell core to read weights into PEs via IFIFO
-
-    // Wait for all weights to load in
-    for (t = 0; t < col; t = t + 1) begin // TODO - Compute time
-      #0.5 clk = 1'b0;
-      #0.5 clk = 1'b1;
-    end
-
-    // Stop weight read from IFIFO
-    #0.5 clk = 1'b0; load = 1'b0; l0_rd = 1'b0;
-    #0.5 clk = 1'b1;
-    /////////////////////////////////////
+    	// Provide some intermission to clear up the kernel loading
+    	#0.5 clk = 1'b0;  load = 0; l0_rd = 0;
+    	#0.5 clk = 1'b1;  
   
+    	// Activation data from xmem to L0 
+		WEN_xmem = 1;
+		CEN_xmem = 0;
+		l0_wr = 1;
+		l0_rd = 0;
+		A_xmem = 0;
 
+		for (i=0; i<len_nij; i=i+1) begin
+			#0.5 clk = 1'b0;
+			if (t>0) A_xmem = A_xmem + 1; 
+			#0.5 clk = 1'b1; 
+		end
 
-    ////// provide some intermission to clear up the kernel loading ///
-    #0.5 clk = 1'b0;  load = 0; l0_rd = 0;
-    #0.5 clk = 1'b1;  
-  
+		#0.5 clk = 1'b0;
+		l0_wr = 0;
+		#0.5 clk = 1'b1;
 
-    for (i=0; i<10 ; i=i+1) begin
-      #0.5 clk = 1'b0;
-      #0.5 clk = 1'b1;  
-    end
-    /////////////////////////////////////
+    	// Execution start
+		#0.5 clk = 1'b0;
+		l0_rd = 1;
+		#0.5 clk = 1'b1;
 
+		for (i=0; i<len_nij+row+col; i=i+1) begin
+			#0.5 clk = 1'b0;
+			execute = 1;
+			#0.5 clk = 1'b1; 
+		end
 
+		// Stop execution 
+    	#0.5 clk = 1'b0;  execute = 0; l0_rd = 0;
+    	#0.5 clk = 1'b1;  
 
-    /////// Activation data writing to L0 ///////
-    #0.5 clk = 1'b0; l0_wr = 1;  CEN_xmem = 0; WEN_xmem = 1; A_xmem = 0; // Put xmem into READ mode and tell core to write from xmem into L0
+    	// OFIFO read and p_mem write
+    	// Ideally, OFIFO should be read while execution, but we have enough ofifo
+    	// depth so we can fetch out after execution.
+    	
+		#0.5 clk = 1'b0;
+		ofifo_rd = 1;
+		#0.5 clk = 1'b1;
 
-    // Write activation data from xmem into L0
-    for (t=0; t<len_nij; t=t+1) begin
-      #0.5 clk = 1'b0; if(t > 0) A_xmem = A_xmem + 1;
-      #0.5 clk = 1'b1;
-    end
+		#0.5 clk = 1'b0;
+		WEN_pmem = 0;
+		CEN_pmem = 0;	
+		#0.5 clk = 1'b1;
 
-    #0.5 clk = 1'b0; l0_wr = 0; CEN_xmem = 1; // Disable write to L0
-    #0.5 clk = 1'b1;
-    /////////////////////////////////////
+    	for (t=0; t<len_nij; t=t+1) begin  
+      		#0.5 clk = 1'b0;
+			A_pmem = A_pmem + 1; 
+      		#0.5 clk = 1'b1;  
+    	end
 
+    	#0.5 clk = 1'b0;  WEN_pmem = 1;  CEN_pmem = 1; ofifo_rd = 0;
+    	#0.5 clk = 1'b1; 
+		
+  	end  // end of kij loop
 
-
-    /////// Execution ///////
-
-    // Activation to IFIFO
-    #0.5 clk = 1'b0; 
-      l0_rd    = 1'b1;   // read from L0
-      ififo_wr = 1'b1;   // write into IFIFO
-      execute  = 1'b0;   // not executing yet
-      ififo_rd = 1'b0;
-    #0.5 clk = 1'b1;
-
-    for (t = 0; t < len_nij; t = t + 1) begin
-      #0.5 clk = 1'b0; // L0 read pointer advances inside core when l0_rd is high
-      #0.5 clk = 1'b1;
-    end
-
-    // Stop filling IFIFO
-    #0.5 clk = 1'b0;
-      l0_rd    = 1'b0;
-      ififo_wr = 1'b0;
-    #0.5 clk = 1'b1;
-
-    // Stream activation into PEs
-    #0.5 clk = 1'b0;
-      execute  = 1'b1;   // enable compute
-      ififo_rd = 1'b1;   // start reading activations from IFIFO
-    #0.5 clk = 1'b1;
-
-    // Stream activations for len_nij cycles, plus some extra
-    // cycles to flush the systolic pipeline.
-    for (t = 0; t < len_nij + col + row; t = t + 1) begin
-      #0.5 clk = 1'b0;
-      #0.5 clk = 1'b1;
-    end
-
-    // Stop execution
-    #0.5 clk = 1'b0;
-      execute  = 1'b0;
-      ififo_rd = 1'b0;
-    #0.5 clk = 1'b1;
-
-  
-    /////////////////////////////////////
-
-
-    //////// OFIFO READ ////////
-    // Ideally, OFIFO should be read while execution, but we have enough ofifo
-    // depth so we can fetch out after execution.
-    //...
-    for (t = 0; t < len_onij; t = t + 1) begin
-      #0.5 clk = 1'b0;
-        ofifo_rd = 1'b1;       // pop one word from OFIFO
-      #0.5 clk = 1'b1;
-    end
-
-    #0.5 clk = 1'b0;
-      ofifo_rd = 1'b0;
-    #0.5 clk = 1'b1;
-
-    /////////////////////////////////////
-
-
-  end  // end of kij loop
-
-
-  ////////// Accumulation /////////
-  out_file = $fopen("out.txt", "r");  
-  acc_file = $fopen("acc.txt", "r"); // May have to modify to skep header lines
-
-  // Following three lines are to remove the first three comment lines of the file
-  out_scan_file = $fscanf(out_file,"%s", answer); 
-  out_scan_file = $fscanf(out_file,"%s", answer); 
-  out_scan_file = $fscanf(out_file,"%s", answer); 
+  // Accumulation
+  acc_file = $fopen("acc.txt", "r"); // address sequence
+  out_file = $fopen("out.txt", "r"); // expected outputs 
 
   error = 0;
 
@@ -350,15 +301,15 @@ initial begin
     #0.5 clk = 1'b1; 
 
     if (i>0) begin
-     out_scan_file = $fscanf(out_file,"%128b", answer); // reading from out file to answer
-       if (sfp_out == answer)
-         $display("%2d-th output featuremap Data matched! :D", i); 
-       else begin
-         $display("%2d-th output featuremap Data ERROR!!", i); 
-         $display("sfpout: %128b", sfp_out);
-         $display("answer: %128b", answer);
-         error = 1;
-       end
+    	out_scan_file = $fscanf(out_file,"%128b", answer); 
+       	if (sfp_out == answer)
+        	$display("Output featuremap Data number %2d matched! :D", i); 
+       	else begin
+        	$display("Output featuremap Data number %2d ERROR!!", i); 
+        	$display("sfpout: %128b", sfp_out);
+        	$display("answer: %128b", answer);
+        	error = 1;
+       	end
     end
    
  
@@ -368,11 +319,16 @@ initial begin
     #0.5 clk = 1'b1;  
 
     for (j=0; j<len_kij+1; j=j+1) begin 
-
-      #0.5 clk = 1'b0;   
-        if (j<len_kij) begin CEN_pmem = 0; WEN_pmem = 1; acc_scan_file = $fscanf(acc_file,"%11b", A_pmem); end
-                       else  begin CEN_pmem = 1; WEN_pmem = 1; end
-
+		#0.5 clk = 1'b0;   
+        if (j<len_kij) begin
+			CEN_pmem = 0;
+			WEN_pmem = 1;
+			acc_scan_file = $fscanf(acc_file,"%11b", A_pmem);
+		end
+        else begin
+			CEN_pmem = 1;
+			WEN_pmem = 1;
+		end
         if (j>0)  acc = 1;  
       #0.5 clk = 1'b1;   
     end
@@ -419,5 +375,8 @@ always @ (posedge clk) begin
    load_q     <= load;
 end
 
-
 endmodule
+
+
+
+

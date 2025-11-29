@@ -14,56 +14,46 @@ input  [psum_bw-1:0] in_n;
 input  clk;
 input  reset;
 
-//a = activation, b = weight, c = psum
-wire  [psum_bw-1:0]   mac_out;
-wire                  a_en, b_en; 
-wire  [bw-1:0]        a_d, b_d; 
-reg   [bw-1:0]        a_q, b_q; 
-reg   [psum_bw-1:0]   c_q; 
-wire  [psum_bw-1:0]   c_d; 
-reg   [1:0]           inst_q; 
-wire  [1:0]           inst_d; 
-reg                   load_ready_q; 
-wire                  load_ready_d; 
-
+reg [1:0] inst_q;
+reg [bw-1:0] a_q;
+reg [bw-1:0] b_q;
+reg [psum_bw-1:0] c_q;
+wire [psum_bw-1:0] mac_out;
+reg load_ready_q;
 
 mac #(.bw(bw), .psum_bw(psum_bw)) mac_instance (
-        .a(a_q), 
-        .b(b_q),
-        .c(c_q),
+    .a(a_q), 
+    .b(b_q),
+    .c(c_q),
 	.out(mac_out)
-); 
+);
+
+assign out_e = a_q;
+assign inst_e = inst_q;
+assign out_s = mac_out;
 
 always @ (posedge clk) begin
-	if (reset) begin 
-            a_q <= 'b0;
-            b_q <= 'b0;
-            c_q <= 'b0;
-            inst_q <= 'b0;
-            load_ready_q <= 'b1;
-        end 
+	if (reset == 1) begin
+		inst_q <= 0;
+		load_ready_q <= 1'b1;
+		a_q <= 0;
+		b_q <= 0;
+		c_q <= 0;
+	end
 	else begin
-            a_q <= a_d;
-            b_q <= a_d;
-            c_q <= c_d;
-            inst_q <= inst_d;
-            load_ready_q <= load_ready_d;
+		inst_q[1] <= inst_w[1];
+		c_q <= in_n;
+		if (inst_w[1] | inst_w[0]) begin
+			a_q <= in_w;
+		end
+		if (inst_w[0] & load_ready_q) begin
+			b_q <= in_w;
+			load_ready_q <= 1'b0;
+		end
+		if (load_ready_q == 1'b0) begin
+			inst_q[0] <= inst_w[0];
+		end
 	end
 end
 
-//Load weight into PE 
-assign b_d          = (inst_w[0] & load_ready_q) ? inst_w : b_q; 
-assign load_ready_d = (inst_w[0] & load_ready_q) ? 1'b0 : load_ready_q; 
-
-assign a_d          = |inst_w ? in_w : a_q; 
-assign b_d          = (inst_w[0] & load_ready_q) ? in_w : b_q; 
-assign c_d          = in_n; 
-
-assign inst_d[0]    = ~load_ready_q ? inst_w[0] : inst_q;// if load done latch new kernel load signal
-assign inst_d[1]    = inst_w[1];
-
-//Connect to outputs
-assign inst_e = inst_q & {1'b1, ~load_ready_q};
-assign out_e  = a_q;
-assign out_s  = mac_out;
 endmodule

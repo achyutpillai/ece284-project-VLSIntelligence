@@ -7,7 +7,7 @@ module corelet #(
 )(
     input  clk,
     input  reset,
-    input  [33:0]               inst,
+    input  [34:0]               inst,
     input  [bw*row-1:0]         data_in,
     input  [psum_bw*col-1:0]    data_in_acc,
     output [psum_bw*col-1:0]    data_out,
@@ -38,7 +38,7 @@ module corelet #(
     wire [psum_bw*col-1:0] mac_out_s;
     wire [col-1:0]         mac_valid;
 
-    mac_array #(
+    mac_array_simd #(
         .bw     (bw),
         .psum_bw(psum_bw),
         .col    (col),
@@ -50,7 +50,8 @@ module corelet #(
         .in_w  (L0_out),          // weights and inputs from L0
         .in_n  ({psum_bw*col{1'b0}}), // unused 
         .inst_w(inst[1:0]),       // {execute, load}
-        .valid (mac_valid)
+        .valid (mac_valid),
+        .mode_2b(inst[34])
     );
 
     // OFIFO 
