@@ -10,7 +10,7 @@ parameter len_kij = 9;
 parameter len_onij = 16;
 parameter col = 8;
 parameter row = 8;
-parameter len_nij = 36;
+parameter len_nij = 8;
 
 reg clk = 0;
 reg reset = 1;
