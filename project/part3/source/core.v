@@ -1,7 +1,8 @@
 //Core module contains corelet, xmem, and pmem 
 // clk 
 // reset - reset on high
-// inst[33:0] - instructions 
+// inst[34:0] - instructions 
+//  34 - mode (0=WS, 1=OS)
 //  33 - accumulate 
 //  32 - pmem chip enable
 //  31 - pmem write enable
@@ -28,7 +29,7 @@ module core #(
 )(
     input clk,
     input reset,    
-    input [33:0] inst,
+    input [34:0] inst,  // CHANGED: Extended to 35 bits
     input [bw*row-1:0] D_xmem,
     output ofifo_valid,
     output [psum_bw*col-1:0] sfp_out
