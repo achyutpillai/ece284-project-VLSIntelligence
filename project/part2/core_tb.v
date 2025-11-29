@@ -228,7 +228,7 @@ initial begin
             // Kernel to xmem 
             A_xmem = 11'b10000000000;
 
-            for (t=0; t<col; t=t+1) begin  
+            for (t=0; t<(mode ? col*2 : col); t=t+1) begin  
                 #0.5 clk = 1'b0;
                 w_scan_file = $fscanf(w_file,"%32b", D_xmem);
                 WEN_xmem = 0;
@@ -350,17 +350,19 @@ initial begin
             #0.5 clk = 1'b1; 
 
             if (i>0) begin
-                out_scan_file = $fscanf(out_file,"%128b", answer); 
-                if (sfp_out == answer) begin
-                    $display("Output featuremap Data number %2d matched! :D", i);
-                    $display("sfpout: %128b", sfp_out);
-                    $display("answer: %128b", answer);
-                end else begin
-                    $display("Output featuremap Data number %2d ERROR!!", i);
-                    $display("sfpout: %128b", sfp_out);
-                    $display("answer: %128b", answer);
-                    error = 1;
-                end
+                if (ofifo_valid) begin
+                    out_scan_file = $fscanf(out_file,"%128b", answer); 
+                    if (sfp_out == answer) begin
+                        $display("Output featuremap Data number %2d matched! :D", i);
+                        $display("sfpout: %128b", sfp_out);
+                        $display("answer: %128b", answer);
+                    end else begin
+                        $display("Output featuremap Data number %2d ERROR!!", i);
+                        $display("sfpout: %128b", sfp_out);
+                        $display("answer: %128b", answer);
+                        error = 1;
+                    end
+                end else $display("Wait: ofifo_valid is low at i=%d", i);
             end
            
             #0.5 clk = 1'b0; reset = 1;

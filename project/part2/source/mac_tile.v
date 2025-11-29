@@ -53,19 +53,22 @@ wire signed [psum_bw-1:0] psum1_in_ext =
 wire signed [1:0] act_lo_2b = a_q[1:0];
 wire signed [1:0] act_hi_2b = a_q[3:2];
 
-wire signed [bw-1:0] act_lo_ext = {{(bw-2){act_lo_2b[1]}}, act_lo_2b};
-wire signed [bw-1:0] act_hi_ext = {{(bw-2){act_hi_2b[1]}}, act_hi_2b};
+// Define distinct extensions for 2-bit vs 4-bit mode
+wire signed [bw-1:0] act_lo_ext_signed = {{(bw-2){act_lo_2b[1]}}, act_lo_2b}; // For 2b Mode
+wire signed [bw-1:0] act_lo_ext_unsigned = {2'b00, act_lo_2b};                // For 4b Mode (Zero Ext)
+
+wire signed [bw-1:0] act_hi_ext = {{(bw-2){act_hi_2b[1]}}, act_hi_2b}; // Always signed
 
 wire signed [bw-1:0] w0_s = wgt0_q;
 wire signed [bw-1:0] w1_s = wgt1_q;
 
 ////////////////////////////////////////////////////////
 // 2-bit act, 4-bit weights (mode_2b = 1)
-// PSUM0_next = PSUM0_in + a_2b * wgt0
-// PSUM1_next = PSUM1_in + a_2b * wgt1
-wire signed [bw-1:0] act2b_ext = act_lo_ext;  // lower 2 bits are the 2-bit act
-wire signed [psum_bw-1:0] prod0_2b = act2b_ext * w0_s;
-wire signed [psum_bw-1:0] prod1_2b = act2b_ext * w1_s;
+// PSUM0_next = PSUM0_in + a_2b_LO * wgt0
+// PSUM1_next = PSUM1_in + a_2b_HI * wgt1
+
+wire signed [psum_bw-1:0] prod0_2b = act_lo_ext_signed * w0_s; // Use SIGNED for 2b mode
+wire signed [psum_bw-1:0] prod1_2b = act_hi_ext * w1_s;
 
 wire signed [psum_bw-1:0] psum0_next_2b = psum0_in_ext + prod0_2b;
 wire signed [psum_bw-1:0] psum1_next_2b = psum1_in_ext + prod1_2b;
@@ -76,9 +79,8 @@ wire signed [psum_bw-1:0] psum1_next_2b = psum1_in_ext + prod1_2b;
 // prod_lo = act_lo * W
 // prod_hi = act_hi * W
 // A*W = prod_lo + (prod_hi << 2)
-// psum_full_next = psum_full_in + prod_full
 
-wire signed [psum_bw-1:0] prod_lo_4b = act_lo_ext * w0_s;
+wire signed [psum_bw-1:0] prod_lo_4b = act_lo_ext_unsigned * w0_s; // Use UNSIGNED for 4b mode
 wire signed [psum_bw-1:0] prod_hi_4b = act_hi_ext * w0_s;
 
 wire signed [psum_bw-1:0] prod_hi_4b_shifted = (prod_hi_4b <<< 2);
