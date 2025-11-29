@@ -350,19 +350,17 @@ initial begin
             #0.5 clk = 1'b1; 
 
             if (i>0) begin
-                if (ofifo_valid) begin
-                    out_scan_file = $fscanf(out_file,"%128b", answer); 
-                    if (sfp_out == answer) begin
-                        $display("Output featuremap Data number %2d matched! :D", i);
-                        $display("sfpout: %128b", sfp_out);
-                        $display("answer: %128b", answer);
-                    end else begin
-                        $display("Output featuremap Data number %2d ERROR!!", i);
-                        $display("sfpout: %128b", sfp_out);
-                        $display("answer: %128b", answer);
-                        error = 1;
-                    end
-                end else $display("Wait: ofifo_valid is low at i=%d", i);
+                out_scan_file = $fscanf(out_file,"%128b", answer); 
+                if (sfp_out == answer) begin
+                    $display("Output featuremap Data number %2d matched! :D", i);
+                    $display("sfpout: %128b", sfp_out);
+                    $display("answer: %128b", answer);
+                end else begin
+                    $display("Output featuremap Data number %2d ERROR!!", i);
+                    $display("sfpout: %128b", sfp_out);
+                    $display("answer: %128b", answer);
+                    error = 1;
+                end
             end
            
             #0.5 clk = 1'b0; reset = 1;
@@ -390,8 +388,8 @@ initial begin
         end
 
         if (error == 0) begin
-            if (loop_count == 0) $display("############ 2-BIT MODE PASSED ##############"); 
-            else                 $display("############ 4-BIT MODE PASSED ##############"); 
+            if (loop_count == 0) $display("############ 4-BIT MODE PASSED ##############"); 
+            else                 $display("############ 2-BIT MODE PASSED ##############"); 
         end else begin
             $display("############ ERROR DETECTED - STOPPING ##############");
             $finish;
