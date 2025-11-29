@@ -307,6 +307,7 @@ initial begin
 
         for (t=0; t<len_nij; t=t+1) begin  
             #0.5 clk = 1'b0;
+            if (t < 5) $display("PMEM write %0d: data = %h", t, core_instance.corelet_insts.ofifo_inst.out);
             A_pmem = A_pmem + 1; 
             #0.5 clk = 1'b1;  
         end
