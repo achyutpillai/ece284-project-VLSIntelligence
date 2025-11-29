@@ -57,7 +57,7 @@ reg execute;
 reg load;
 
 // --- DYNAMIC FILE LOADING VARIABLES ---
-reg [8*60:1] data_dir = "data_files/";  // Directory variable
+reg [8*60:1] data_dir = "./data_files/";  // Directory variable
 reg [8*10:1] prefix;                    // Holds "2b_" or "4b_"
 reg [8*128:1] w_file_name;
 reg [8*128:1] x_file_name;
@@ -126,7 +126,7 @@ initial begin
     $dumpfile("core_tb.vcd");
     $dumpvars(0,core_tb);
 
-    // --- LOOP TWICE: First for 2b, then for 4b ---
+    // --- LOOP TWICE: First for 4b, then for 2b ---
     for (loop_count = 0; loop_count < 2; loop_count = loop_count + 1) begin
 
         // -------------------------------------------------------
@@ -134,16 +134,16 @@ initial begin
         // -------------------------------------------------------
         if (loop_count == 0) begin
             $display("###################################################");
-            $display("### STARTING PART 2 CHECK: 2-BIT MODE (Mode=1) ###");
-            $display("###################################################");
-            mode = 1; 
-            prefix = "2b_";
-        end else begin
-            $display("###################################################");
             $display("### STARTING PART 2 CHECK: 4-BIT MODE (Mode=0) ###");
             $display("###################################################");
             mode = 0; 
             prefix = "4b_";
+        end else begin
+            $display("###################################################");
+            $display("### STARTING PART 2 CHECK: 2-BIT MODE (Mode=1) ###");
+            $display("###################################################");
+            mode = 1; 
+            prefix = "2b_";
         end
 
         // Dynamically construct filenames using data_dir and prefix
@@ -336,9 +336,9 @@ initial begin
         // acc_scan_file = $fscanf(acc_file,"%s", captured_data);
         // acc_scan_file = $fscanf(acc_file,"%s", captured_data);
 
-        out_scan_file = $fscanf(out_file,"%s", captured_data);
-        out_scan_file = $fscanf(out_file,"%s", captured_data);
-        out_scan_file = $fscanf(out_file,"%s", captured_data);
+        // out_scan_file = $fscanf(out_file,"%s", captured_data);
+        // out_scan_file = $fscanf(out_file,"%s", captured_data);
+        // out_scan_file = $fscanf(out_file,"%s", captured_data);
 
         error = 0;
 
