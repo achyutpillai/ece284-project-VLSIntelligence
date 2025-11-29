@@ -13,7 +13,7 @@ output [1:0] inst_e;
 input  [psum_bw-1:0] in_n;
 input  clk;
 input  reset;
-input  mode;  // NEW: 0=WS, 1=OS
+input  mode;  // 0=WS, 1=OS
 
 reg [1:0] inst_q;
 reg [bw-1:0] a_q;
@@ -45,19 +45,30 @@ always @ (posedge clk) begin
         inst_q[1] <= inst_w[1];
         
         // ===============================================
-        // CRITICAL FIX: Mode-dependent c_q update
+        // FIXED: Correct mode-dependent c_q update
         // ===============================================
-        if (inst_w[1]) begin  // Only update during execute
-            if (mode == 1'b1) begin
-                // Output Stationary: accumulate in place
-                c_q <= mac_out;
-            end 
-            else begin
-                // Weight Stationary: take from north
+        // The key insight: in OS mode, we accumulate the PREVIOUS mac_out
+        // In WS mode, we take fresh data from the north
+        // ===============================================
+        
+        if (mode == 1'b0) begin
+            // Weight Stationary Mode (WS)
+            // Pass partial sums from north to south
+            if (inst_w[1]) begin
                 c_q <= in_n;
             end
         end
-        // IMPORTANT: No else - c_q retains value when not executing
+        else begin
+            // Output Stationary Mode (OS)  
+            // Accumulate in place - retain c_q unless we're in the first execute
+            // The accumulation happens automatically because mac_out = a*b + c_q
+            // We DON'T update c_q here - it stays the same, allowing accumulation
+            // ONLY update c_q during the flush phase (when mode switches back to WS)
+            if (inst_w[1]) begin
+                c_q <= mac_out;  // Store result for next accumulation
+            end
+        end
+        
         // ===============================================
         
         if (inst_w[1] | inst_w[0]) begin
