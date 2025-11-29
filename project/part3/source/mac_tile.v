@@ -44,25 +44,38 @@ always @ (posedge clk) begin
     else begin
         inst_q[1] <= inst_w[1];
         
-        // ═══════════════════════════════════════════════════════════════
-        // THE CRITICAL FIX: Mode-dependent c_q update
-        // ═══════════════════════════════════════════════════════════════
+        // Mode-dependent c_q update
         if (mode == 1'b1) begin
-            // OS Mode: Accumulate only during execute
+            // OS Mode: accumulate during execute only
             if (inst_w[1]) begin
                 c_q <= mac_out;
             end
-            // Otherwise keep c_q unchanged (holds accumulated value)
+            // else: c_q holds its accumulated value
         end
         else begin
-            // WS Mode: Always flow from north (original behavior)
+            // WS Mode: always flow from north (original behavior)
             c_q <= in_n;
+        end
+        
+        // ═══════════════════════════════════════════════════════════════
+        // CRITICAL: a_q update logic
+        // In WS mode: a_q updates during both load and execute (original)
+        // In OS mode: a_q should ONLY update during execute!
+        // ═══════════════════════════════════════════════════════════════
+        if (mode == 1'b0) begin
+            // WS Mode: original behavior - update during load OR execute
+            if (inst_w[1] | inst_w[0]) begin
+                a_q <= in_w;
+            end
+        end
+        else begin
+            // OS Mode: only update during execute, NOT during load
+            if (inst_w[1]) begin
+                a_q <= in_w;
+            end
         end
         // ═══════════════════════════════════════════════════════════════
         
-        if (inst_w[1] | inst_w[0]) begin
-            a_q <= in_w;
-        end
         if (inst_w[0] & load_ready_q) begin
             b_q <= in_w;
             load_ready_q <= 1'b0;
