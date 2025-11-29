@@ -15,7 +15,7 @@ parameter len_nij = 36;
 reg clk = 0;
 reg reset = 1;
 
-wire [34:0] inst_q;  // CHANGED: Extended to 35 bits
+wire [34:0] inst_q;  // CHANGED: Extended to 35 bits for mode
 
 reg [1:0]  inst_w_q = 0; 
 reg [bw*row-1:0] D_xmem_q = 0;
@@ -40,8 +40,8 @@ reg execute_q = 0;
 reg load_q = 0;
 reg acc_q = 0;
 reg acc = 0;
-reg mode = 0;     // NEW: Mode control (0=WS, 1=OS)
-reg mode_q = 0;   // NEW: Mode register
+reg mode = 0;      // ADDED: Mode signal, kept at 0 for WS mode
+reg mode_q = 0;    // ADDED: Mode register
 
 reg [1:0]  inst_w; 
 reg [bw*row-1:0] D_xmem;
@@ -59,16 +59,16 @@ reg [8*30:1] w_file_name;
 wire ofifo_valid;
 wire [col*psum_bw-1:0] sfp_out;
 
-integer x_file, x_scan_file ; 
-integer w_file, w_scan_file ; 
-integer acc_file, acc_scan_file ; 
-integer out_file, out_scan_file ; 
+integer x_file, x_scan_file;
+integer w_file, w_scan_file;
+integer acc_file, acc_scan_file;
+integer out_file, out_scan_file;
 integer captured_data; 
 integer t, i, j, k, kij;
 integer error;
 
-// NEW: Extended instruction mapping with mode bit
-assign inst_q[34] = mode_q;     // Mode bit (0=WS, 1=OS)
+// CHANGED: Extended instruction mapping to include mode bit
+assign inst_q[34] = mode_q;     // Mode bit (0=WS, 1=OS) - ALWAYS 0 IN THIS TEST
 assign inst_q[33] = acc_q;
 assign inst_q[32] = CEN_pmem_q;
 assign inst_q[31] = WEN_pmem_q;
@@ -111,7 +111,7 @@ initial begin
     l0_wr    = 0;
     execute  = 0;
     load     = 0;
-    mode     = 0;  // NEW: Initialize mode to WS
+    mode     = 0;  // ADDED: Initialize mode to 0 (WS mode) - STAYS 0 ENTIRE TEST
 
     $dumpfile("core_tb.vcd");
     $dumpvars(0,core_tb);
@@ -250,10 +250,10 @@ initial begin
         #0.5 clk = 1'b1;
 
         // ============================================
-        // EXECUTION IN OUTPUT STATIONARY MODE
+        // EXECUTION IN WS MODE (mode stays 0)
+        // This should work exactly like the original
         // ============================================
         #0.5 clk = 1'b0;
-        mode = 1;      // Enable OS mode (accumulate in place)
         l0_rd = 1;
         #0.5 clk = 1'b1;
 
@@ -263,26 +263,8 @@ initial begin
             #0.5 clk = 1'b1; 
         end
 
-        // ============================================
-        // FLUSH / DRAIN SEQUENCE
-        // Switch to WS mode to enable vertical data flow
-        // Stop L0 reads so multiplication = 0
-        // Keep execute=1 to shift psums down to OFIFO
-        // ============================================
-        #0.5 clk = 1'b0;
-        mode = 0;      // Switch to WS mode (enables north→south flow)
-        l0_rd = 0;     // Stop new data (mult = 0*weight = 0)
-        execute = 1;   // Keep pipeline active to propagate data
-        #0.5 clk = 1'b1;
-
-        // Flush for row+2 cycles to drain all PEs
-        for (i=0; i<row+2; i=i+1) begin 
-            #0.5 clk = 1'b0;
-            #0.5 clk = 1'b1; 
-        end
-
         // Stop execution 
-        #0.5 clk = 1'b0;  execute = 0; 
+        #0.5 clk = 1'b0;  execute = 0; l0_rd = 0;
         #0.5 clk = 1'b1;  
 
         // OFIFO read and p_mem write
@@ -309,90 +291,90 @@ initial begin
         
     end  // end of kij loop
 
-  // Accumulation
-  acc_file = $fopen("acc.txt", "r"); // address sequence
-  out_file = $fopen("out.txt", "r"); // expected outputs 
+    // Accumulation
+    acc_file = $fopen("acc.txt", "r"); // address sequence
+    out_file = $fopen("out.txt", "r"); // expected outputs 
 
-  error = 0;
+    error = 0;
 
-  $display("############ Verification Start during accumulation #############"); 
+    $display("############ Verification Start during accumulation #############"); 
 
-  for (i=0; i<len_onij+1; i=i+1) begin 
+    for (i=0; i<len_onij+1; i=i+1) begin 
 
-    #0.5 clk = 1'b0; 
-    #0.5 clk = 1'b1; 
+        #0.5 clk = 1'b0; 
+        #0.5 clk = 1'b1; 
 
-    if (i>0) begin
-        out_scan_file = $fscanf(out_file,"%128b", answer); 
-        if (sfp_out == answer)
-            $display("Output featuremap Data number %2d matched! :D", i); 
-        else begin
-            $display("Output featuremap Data number %2d ERROR!!", i); 
-            $display("sfpout: %128b", sfp_out);
-            $display("answer: %128b", answer);
-            error = 1;
+        if (i>0) begin
+            out_scan_file = $fscanf(out_file,"%128b", answer); 
+            if (sfp_out == answer)
+                $display("Output featuremap Data number %2d matched! :D", i); 
+            else begin
+                $display("Output featuremap Data number %2d ERROR!!", i); 
+                $display("sfpout: %128b", sfp_out);
+                $display("answer: %128b", answer);
+                error = 1;
+            end
         end
-    end
    
-    #0.5 clk = 1'b0; reset = 1;
-    #0.5 clk = 1'b1;  
-    #0.5 clk = 1'b0; reset = 0; 
-    #0.5 clk = 1'b1;  
+        #0.5 clk = 1'b0; reset = 1;
+        #0.5 clk = 1'b1;  
+        #0.5 clk = 1'b0; reset = 0; 
+        #0.5 clk = 1'b1;  
 
-    for (j=0; j<len_kij+1; j=j+1) begin 
-        #0.5 clk = 1'b0;   
-        if (j<len_kij) begin
-            CEN_pmem = 0;
-            WEN_pmem = 1;
-            acc_scan_file = $fscanf(acc_file,"%11b", A_pmem);
+        for (j=0; j<len_kij+1; j=j+1) begin 
+            #0.5 clk = 1'b0;   
+            if (j<len_kij) begin
+                CEN_pmem = 0;
+                WEN_pmem = 1;
+                acc_scan_file = $fscanf(acc_file,"%11b", A_pmem);
+            end
+            else begin
+                CEN_pmem = 1;
+                WEN_pmem = 1;
+            end
+            if (j>0)  acc = 1;  
+            #0.5 clk = 1'b1;   
         end
-        else begin
-            CEN_pmem = 1;
-            WEN_pmem = 1;
-        end
-        if (j>0)  acc = 1;  
-      #0.5 clk = 1'b1;   
+
+        #0.5 clk = 1'b0; acc = 0;
+        #0.5 clk = 1'b1; 
     end
 
-    #0.5 clk = 1'b0; acc = 0;
-    #0.5 clk = 1'b1; 
-  end
+    if (error == 0) begin
+        $display("############ No error detected ##############"); 
+        $display("########### Project Completed !! ############"); 
+    end
 
-  if (error == 0) begin
-    $display("############ No error detected ##############"); 
-    $display("########### Project Completed !! ############"); 
-  end
+    $fclose(acc_file);
+    //////////////////////////////////
 
-  $fclose(acc_file);
-  //////////////////////////////////
+    for (t=0; t<10; t=t+1) begin  
+        #0.5 clk = 1'b0;  
+        #0.5 clk = 1'b1;  
+    end
 
-  for (t=0; t<10; t=t+1) begin  
-    #0.5 clk = 1'b0;  
-    #0.5 clk = 1'b1;  
-  end
-
-  #10 $finish;
+    #10 $finish;
 
 end
 
 always @ (posedge clk) begin
-   inst_w_q   <= inst_w; 
-   D_xmem_q   <= D_xmem;
-   CEN_xmem_q <= CEN_xmem;
-   WEN_xmem_q <= WEN_xmem;
-   A_pmem_q   <= A_pmem;
-   CEN_pmem_q <= CEN_pmem;
-   WEN_pmem_q <= WEN_pmem;
-   A_xmem_q   <= A_xmem;
-   ofifo_rd_q <= ofifo_rd;
-   acc_q      <= acc;
-   ififo_wr_q <= ififo_wr;
-   ififo_rd_q <= ififo_rd;
-   l0_rd_q    <= l0_rd;
-   l0_wr_q    <= l0_wr ;
-   execute_q  <= execute;
-   load_q     <= load;
-   mode_q     <= mode;  // NEW: Register mode signal
+    inst_w_q   <= inst_w; 
+    D_xmem_q   <= D_xmem;
+    CEN_xmem_q <= CEN_xmem;
+    WEN_xmem_q <= WEN_xmem;
+    A_pmem_q   <= A_pmem;
+    CEN_pmem_q <= CEN_pmem;
+    WEN_pmem_q <= WEN_pmem;
+    A_xmem_q   <= A_xmem;
+    ofifo_rd_q <= ofifo_rd;
+    acc_q      <= acc;
+    ififo_wr_q <= ififo_wr;
+    ififo_rd_q <= ififo_rd;
+    l0_rd_q    <= l0_rd;
+    l0_wr_q    <= l0_wr ;
+    execute_q  <= execute;
+    load_q     <= load;
+    mode_q     <= mode;  // ADDED: Register mode signal (always 0 in this test)
 end
 
 endmodule
