@@ -15,7 +15,7 @@ parameter len_nij = 36;
 reg clk = 0;
 reg reset = 1;
 
-wire [34:0] inst_q;  // CHANGED: Extended to 35 bits for mode
+wire [34:0] inst_q;  // Extended to 35 bits for mode
 
 reg [1:0]  inst_w_q = 0; 
 reg [bw*row-1:0] D_xmem_q = 0;
@@ -40,8 +40,8 @@ reg execute_q = 0;
 reg load_q = 0;
 reg acc_q = 0;
 reg acc = 0;
-reg mode = 0;      // ADDED: Mode signal, kept at 0 for WS mode
-reg mode_q = 0;    // ADDED: Mode register
+reg mode = 0;      // Mode signal (will switch between OS and WS)
+reg mode_q = 0;    // Mode register
 
 reg [1:0]  inst_w; 
 reg [bw*row-1:0] D_xmem;
@@ -67,8 +67,8 @@ integer captured_data;
 integer t, i, j, k, kij;
 integer error;
 
-// CHANGED: Extended instruction mapping to include mode bit
-assign inst_q[34] = mode_q;     // Mode bit (0=WS, 1=OS) - ALWAYS 0 IN THIS TEST
+// Extended instruction mapping with mode bit
+assign inst_q[34] = mode_q;     // Mode bit (0=WS, 1=OS)
 assign inst_q[33] = acc_q;
 assign inst_q[32] = CEN_pmem_q;
 assign inst_q[31] = WEN_pmem_q;
@@ -111,7 +111,7 @@ initial begin
     l0_wr    = 0;
     execute  = 0;
     load     = 0;
-    mode     = 0;  // ADDED: Initialize mode to 0 (WS mode) - STAYS 0 ENTIRE TEST
+    mode     = 0;  // Initialize mode
 
     $dumpfile("core_tb.vcd");
     $dumpvars(0,core_tb);
@@ -217,6 +217,13 @@ initial begin
         l0_wr = 0;
         #0.5 clk = 1'b1;
 
+        // ============================================
+        // SET OS MODE BEFORE LOADING WEIGHTS
+        // ============================================
+        #0.5 clk = 1'b0;
+        mode = 1;      // Enable OS mode BEFORE loading
+        #0.5 clk = 1'b1;
+
         // Kernel from L0 to PEs
         #0.5 clk = 1'b0;
         l0_rd = 1;
@@ -250,8 +257,8 @@ initial begin
         #0.5 clk = 1'b1;
 
         // ============================================
-        // EXECUTION IN WS MODE (mode stays 0)
-        // This should work exactly like the original
+        // EXECUTION IN OUTPUT STATIONARY MODE  
+        // (mode already set to 1 before loading)
         // ============================================
         #0.5 clk = 1'b0;
         l0_rd = 1;
@@ -263,8 +270,26 @@ initial begin
             #0.5 clk = 1'b1; 
         end
 
+        // ============================================
+        // FLUSH / DRAIN SEQUENCE
+        // Switch to WS mode to enable vertical data flow
+        // Stop L0 reads so multiplication = 0
+        // Keep execute=1 to shift psums down to OFIFO
+        // ============================================
+        #0.5 clk = 1'b0;
+        mode = 0;      // Switch to WS mode (enables north→south flow)
+        l0_rd = 0;     // Stop new data (mult = 0*weight = 0)
+        execute = 1;   // Keep pipeline active to propagate data
+        #0.5 clk = 1'b1;
+
+        // Flush for row+2 cycles to drain all PEs
+        for (i=0; i<row+2; i=i+1) begin 
+            #0.5 clk = 1'b0;
+            #0.5 clk = 1'b1; 
+        end
+
         // Stop execution 
-        #0.5 clk = 1'b0;  execute = 0; l0_rd = 0;
+        #0.5 clk = 1'b0;  execute = 0; 
         #0.5 clk = 1'b1;  
 
         // OFIFO read and p_mem write
@@ -374,7 +399,7 @@ always @ (posedge clk) begin
     l0_wr_q    <= l0_wr ;
     execute_q  <= execute;
     load_q     <= load;
-    mode_q     <= mode;  // ADDED: Register mode signal (always 0 in this test)
+    mode_q     <= mode;
 end
 
 endmodule
