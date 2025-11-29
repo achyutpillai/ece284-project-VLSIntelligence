@@ -268,6 +268,7 @@ initial begin
                 #0.5 clk = 1'b1; 
             end
 
+    	    // Provide some intermission to clear up the kernel loading
             #0.5 clk = 1'b0;  load = 0; l0_rd = 0;
             #0.5 clk = 1'b1;  
           
@@ -304,6 +305,9 @@ initial begin
             #0.5 clk = 1'b1;  
 
             // OFIFO read and p_mem write
+            // Ideally, OFIFO should be read while execution, but we have enough ofifo
+            // depth so we can fetch out after execution.
+    	
             #0.5 clk = 1'b0;
             ofifo_rd = 1;
             #0.5 clk = 1'b1;
