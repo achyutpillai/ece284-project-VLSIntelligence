@@ -15,7 +15,7 @@ parameter len_nij = 36;
 reg clk = 0;
 reg reset = 1;
 
-// Mode bit added to instruction (Index 34)
+// Increased width to 35 to include mode bit at MSB
 wire [34:0] inst_q; 
 
 reg [1:0]  inst_w_q = 0; 
@@ -77,6 +77,7 @@ integer t, i, j, k, kij;
 integer error;
 integer loop_count; 
 
+// Assign mode bit to MSB (Index 34)
 assign inst_q[34]   = mode_q; 
 assign inst_q[33]   = acc_q;
 assign inst_q[32]   = CEN_pmem_q;
@@ -159,10 +160,10 @@ initial begin
             $finish;
         end
         
-        // Remove comments
-        x_scan_file = $fscanf(x_file,"%0s", captured_data);
-        x_scan_file = $fscanf(x_file,"%0s", captured_data);
-        x_scan_file = $fscanf(x_file,"%0s", captured_data);
+        // Skip headers
+        x_scan_file = $fscanf(x_file,"%s", captured_data);
+        x_scan_file = $fscanf(x_file,"%s", captured_data);
+        x_scan_file = $fscanf(x_file,"%s", captured_data);
 
         // Reset Sequence
         #0.5 clk = 1'b0;   reset = 1;
@@ -198,7 +199,6 @@ initial begin
             
             // Generate Weight Filename dynamically
             $sformat(w_file_name, "%0s%0sweight_itile0_otile0_kij%0d.txt", data_dir, prefix, kij);
-            // $display("Loading Weight File: %0s", w_file_name); // Uncomment for debug
 
             w_file = $fopen(w_file_name, "r");
             if (w_file == 0) begin
@@ -206,9 +206,10 @@ initial begin
                 $finish;
             end
 
-            w_scan_file = $fscanf(w_file,"%0s", captured_data);
-            w_scan_file = $fscanf(w_file,"%0s", captured_data);
-            w_scan_file = $fscanf(w_file,"%0s", captured_data);
+            // Skip headers
+            w_scan_file = $fscanf(w_file,"%s", captured_data);
+            w_scan_file = $fscanf(w_file,"%s", captured_data);
+            w_scan_file = $fscanf(w_file,"%s", captured_data);
 
             #0.5 clk = 1'b0;    reset = 1;
             #0.5 clk = 1'b1; 
@@ -330,6 +331,15 @@ initial begin
         if (acc_file == 0) begin $display("ERROR: Missing %0s", acc_file_name); $finish; end
         if (out_file == 0) begin $display("ERROR: Missing %0s", out_file_name); $finish; end
 
+        // Skip headers 
+        // acc_scan_file = $fscanf(acc_file,"%s", captured_data);
+        // acc_scan_file = $fscanf(acc_file,"%s", captured_data);
+        // acc_scan_file = $fscanf(acc_file,"%s", captured_data);
+
+        out_scan_file = $fscanf(out_file,"%s", captured_data);
+        out_scan_file = $fscanf(out_file,"%s", captured_data);
+        out_scan_file = $fscanf(out_file,"%s", captured_data);
+
         error = 0;
 
         $display("############ Verification Start during accumulation #############"); 
@@ -341,10 +351,12 @@ initial begin
 
             if (i>0) begin
                 out_scan_file = $fscanf(out_file,"%128b", answer); 
-                if (sfp_out == answer)
-                    $display("Output featuremap Data number %2d matched! :D", i); 
-                else begin
-                    $display("Output featuremap Data number %2d ERROR!!", i); 
+                if (sfp_out == answer) begin
+                    $display("Output featuremap Data number %2d matched! :D", i);
+                    $display("sfpout: %128b", sfp_out);
+                    $display("answer: %128b", answer);
+                end else begin
+                    $display("Output featuremap Data number %2d ERROR!!", i);
                     $display("sfpout: %128b", sfp_out);
                     $display("answer: %128b", answer);
                     error = 1;

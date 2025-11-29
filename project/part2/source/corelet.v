@@ -38,7 +38,7 @@ module corelet #(
     wire [psum_bw*col-1:0] mac_out_s;
     wire [col-1:0]         mac_valid;
 
-    mac_array_simd #(
+    mac_array #(
         .bw     (bw),
         .psum_bw(psum_bw),
         .col    (col),

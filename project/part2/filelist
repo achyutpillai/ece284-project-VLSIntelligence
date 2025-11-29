@@ -1,5 +1,6 @@
 ./core_tb.v
 ./source/core.v
+./source/corelet.v
 ./source/fifo_depth64.v
 ./source/fifo_mux_16_1.v
 ./source/fifo_mux_2_1.v
