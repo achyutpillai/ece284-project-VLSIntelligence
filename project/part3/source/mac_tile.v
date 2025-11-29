@@ -21,7 +21,7 @@ reg [bw-1:0] b_q;
 reg [psum_bw-1:0] c_q;
 wire [psum_bw-1:0] mac_out;
 reg load_ready_q;
-reg was_os_mode;  // Track if we were EVER in OS mode since last reset
+reg mode_q;  // Track mode from previous cycle
 
 mac #(.bw(bw), .psum_bw(psum_bw)) mac_instance (
     .a(a_q), 
@@ -41,15 +41,11 @@ always @ (posedge clk) begin
         a_q <= 0;
         b_q <= 0;
         c_q <= 0;
-        was_os_mode <= 0;
+        mode_q <= 0;
     end
     else begin
         inst_q[1] <= inst_w[1];
-        
-        // Track if we've been in OS mode
-        if (mode == 1'b1) begin
-            was_os_mode <= 1'b1;
-        end
+        mode_q <= mode;  // Track previous mode
         
         // ═══════════════════════════════════════════════════════════════
         // c_q update logic
@@ -60,18 +56,18 @@ always @ (posedge clk) begin
                 c_q <= mac_out;
             end
         end
-        else if (was_os_mode) begin
-            // Flush phase: We're in WS mode but were previously in OS mode
+        else if (mode == 1'b0 && mode_q == 1'b1 && inst_w[1]) begin
+            // Flush phase: FIRST cycle of OS→WS transition during execute
             // Don't update c_q - let accumulated value drain
         end
         else begin
-            // Pure WS Mode (never been in OS): flow from north
+            // Normal WS Mode: flow from north
             c_q <= in_n;
         end
         // ═══════════════════════════════════════════════════════════════
         
         // ═══════════════════════════════════════════════════════════════
-        // a_q update logic - CRITICAL FIX FOR FLUSH
+        // a_q update logic
         // ═══════════════════════════════════════════════════════════════
         if (mode == 1'b1) begin
             // OS Mode: only update during execute
@@ -79,18 +75,12 @@ always @ (posedge clk) begin
                 a_q <= in_w;
             end
         end
-        else if (was_os_mode) begin
-            // Flush phase: DON'T update a_q!
-            // Keep a_q at whatever value it has
-            // Since L0 is not reading (l0_rd=0), we want a_q to stay constant
-            // or better yet, become 0 so mac_out = 0*b + c = c
-            // Let's zero it out on first flush cycle
-            if (inst_w[1]) begin
-                a_q <= 0;  // Zero out a_q during flush
-            end
+        else if (mode == 1'b0 && mode_q == 1'b1 && inst_w[1]) begin
+            // Flush phase: zero out a_q so mac_out = 0*b + c = c
+            a_q <= 0;
         end
         else begin
-            // Pure WS Mode: update during load OR execute
+            // Normal WS Mode: update during load OR execute
             if (inst_w[1] | inst_w[0]) begin
                 a_q <= in_w;
             end
