@@ -26,6 +26,7 @@ module mac_row (clk, out_s, in_w, in_n, valid, inst_w, reset, mode_2b);
     mac_tile #(.bw(bw), .psum_bw(psum_bw)) mac_tile_instance (
         .clk(clk),
         .reset(reset),
+        .mode_2b(mode_2b),
         .in_w( temp_in[bw*i-1:bw*(i-1)]),
         .out_e(temp_in[bw*(i+1)-1:bw*i]),
         .inst_w(temp_inst[2*i-1:2*(i-1)]),

@@ -1,6 +1,5 @@
 // Created by prof. Mingu Kang @VVIP Lab in UCSD ECE department
-// Modified to support mixed precision (2-bit unsigned act, 4-bit signed weight)
-// Update: Activations are Unsigned in ALL modes.
+// Please do not spread this code without permission 
 module mac_tile (clk, out_s, in_w, out_e, in_n, inst_w, inst_e, reset, mode_2b);
 
 parameter bw = 4;
@@ -27,7 +26,7 @@ reg  load_ready_q;
 reg  [bw-1:0] wgt0_q, wgt1_q;     
 reg  lane_sel_q;   // 0: next load -> wgt0, 1: next load -> wgt1 (2b only)
 
-wire [bw-1:0]       a_d = |inst_w ? in_w : a_q; 
+wire [bw-1:0]      a_d = |inst_w ? in_w : a_q; 
 wire [psum_bw-1:0] c_d = in_n; 
 
 
@@ -42,7 +41,7 @@ assign wgt1_d = (load_en) ? ((!mode_2b || lane_sel_q) ? in_w : wgt1_q) : wgt1_q;
 wire [lane_bw-1:0] psum0_in_lane = c_q[lane_bw-1:0];
 wire [lane_bw-1:0] psum1_in_lane = c_q[psum_bw-1:lane_bw];
 
-// sign-extend each lane (Partial sums are always signed)
+// sign-extend each lane
 wire signed [psum_bw-1:0] psum0_in_ext =
     {{(psum_bw-lane_bw){psum0_in_lane[lane_bw-1]}}, psum0_in_lane};
 
@@ -51,17 +50,11 @@ wire signed [psum_bw-1:0] psum1_in_ext =
 
 // activations
 // always store a 4-bit activation in a_q
-wire [1:0] act_lo_2b = a_q[1:0]; // Treated as raw bits
-wire [1:0] act_hi_2b = a_q[3:2]; // Treated as raw bits
+wire signed [1:0] act_lo_2b = a_q[1:0];
+wire signed [1:0] act_hi_2b = a_q[3:2];
 
-// FIX 1: act_lo must be ZERO extended. 
-// Correct for 2-bit Unsigned Mode AND 4-bit lower half.
-wire signed [bw-1:0] act_lo_ext = {{(bw-2){1'b0}}, act_lo_2b}; 
-
-// FIX 2: act_hi must be ZERO extended.
-// Since 4-bit acts are Unsigned, the upper 2 bits are just magnitude.
-// If we used sign-extension here, a '1' in bit 3 would be treated as negative.
-wire signed [bw-1:0] act_hi_ext = {{(bw-2){1'b0}}, act_hi_2b};
+wire signed [bw-1:0] act_lo_ext = {{(bw-2){act_lo_2b[1]}}, act_lo_2b};
+wire signed [bw-1:0] act_hi_ext = {{(bw-2){act_hi_2b[1]}}, act_hi_2b};
 
 wire signed [bw-1:0] w0_s = wgt0_q;
 wire signed [bw-1:0] w1_s = wgt1_q;
@@ -70,7 +63,7 @@ wire signed [bw-1:0] w1_s = wgt1_q;
 // 2-bit act, 4-bit weights (mode_2b = 1)
 // PSUM0_next = PSUM0_in + a_2b * wgt0
 // PSUM1_next = PSUM1_in + a_2b * wgt1
-wire signed [bw-1:0] act2b_ext = act_lo_ext;  // lower 2 bits are the 2-bit act (Unsigned)
+wire signed [bw-1:0] act2b_ext = act_lo_ext;  // lower 2 bits are the 2-bit act
 wire signed [psum_bw-1:0] prod0_2b = act2b_ext * w0_s;
 wire signed [psum_bw-1:0] prod1_2b = act2b_ext * w1_s;
 

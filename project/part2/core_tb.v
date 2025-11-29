@@ -357,8 +357,8 @@ initial begin
                 out_scan_file = $fscanf(out_file,"%128b", answer); 
                 if (sfp_out == answer) begin
                     $display("Output featuremap Data number %2d matched! :D", i);
-                    $display("sfpout: %128b", sfp_out);
-                    $display("answer: %128b", answer);
+                    // $display("sfpout: %128b", sfp_out);
+                    // $display("answer: %128b", answer);
                 end else begin
                     $display("Output featuremap Data number %2d ERROR!!", i);
                     $display("sfpout: %128b", sfp_out);
