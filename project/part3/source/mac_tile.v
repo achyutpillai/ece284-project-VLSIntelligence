@@ -25,14 +25,17 @@ reg load_ready_q;
 mac #(.bw(bw), .psum_bw(psum_bw)) mac_instance (
     .a(a_q), 
     .b(b_q),
-    .c(c_q),
+    .c(c_q),    // In WS, c_q is input psum. In OS, c_q is accumulator.
     .out(mac_out)
 );
 
 assign out_e = a_q;
 assign inst_e = inst_q;
-assign out_s = mac_out;
 
+// --- CRITICAL CHANGE: South Output Mux ---
+// WS Mode: Output the calculated Psum (mac_out)
+// OS Mode: Output the Weight (b_q) to pass it to the row below
+assign out_s = mode ? {{ (psum_bw-bw){1'b0} }, b_q} : mac_out;
 
 wire [bw-1:0] weight_from_n = in_n[bw-1:0];
 
@@ -47,52 +50,47 @@ always @ (posedge clk) begin
     else begin
         inst_q[1] <= inst_w[1];
         
-        // ═══════════════════════════════════════════════════════════════
-        // c_q update: The core logic
-        // ═══════════════════════════════════════════════════════════════
+        // 1. C_Q (Accumulator/Psum) Logic
         if (mode == 1'b1) begin
-            // OS Mode: Only accumulate during execute
+            // OS Mode: Accumulate in place during execute
             if (inst_w[1]) begin
                 c_q <= mac_out;
             end
-            // else: hold c_q value (no update)
+            // Note: To drain OS psums, you will switch to WS mode later
         end
         else begin
-            // WS Mode: Always flow from north (original part1 behavior)
+            // WS Mode: Capture Psum from North to add to it
             c_q <= in_n;
         end
-        // ═══════════════════════════════════════════════════════════════
         
-        // ═══════════════════════════════════════════════════════════════
-        // a_q update: Mode-dependent behavior
-        // ═══════════════════════════════════════════════════════════════
+        // 2. A_Q (Activation) Logic
         if (mode == 1'b1) begin
-            // OS Mode: Only update during execute (not during load)
-            if (inst_w[1]) begin
-                a_q <= in_w;
-            end
+            // OS Mode: Update during execute
+            if (inst_w[1]) a_q <= in_w;
         end
         else begin
-            // WS Mode: Update during load OR execute (original part1 behavior)
-            if (inst_w[1] | inst_w[0]) begin
-                a_q <= in_w;
-            end
+            // WS Mode: Update during load or execute
+            if (inst_w[1] | inst_w[0]) a_q <= in_w;
         end
-        // ═══════════════════════════════════════════════════════════════
         
-        // b_q logic: Mode-dependent weight loading
-        if (inst_w[0] & load_ready_q) begin
-            if (mode == 1'b1) begin
-                // OS Mode: Load weight from north (IFIFO)
+        // 3. B_Q (Weight) Logic - CRITICAL CHANGE
+        if (mode == 1'b1) begin
+            // OS Mode: Weights stream! Update every execute cycle.
+            if (inst_w[1]) begin
                 b_q <= weight_from_n;
             end
-            else begin
-                // WS Mode: Load weight from west (original behavior)
+        end 
+        else begin
+             // WS Mode: Weights are stationary. Load once then hold.
+            if (inst_w[0] & load_ready_q) begin
                 b_q <= in_w;
+                load_ready_q <= 1'b0;
             end
-            load_ready_q <= 1'b0;
         end
 
+        // Reset load flag logic (Same as original)
+        if (inst_w[0] == 0) load_ready_q <= 1'b1;
+        
         if (load_ready_q == 1'b0) begin
             inst_q[0] <= inst_w[0];
         end

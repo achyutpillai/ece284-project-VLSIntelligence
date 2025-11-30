@@ -7,51 +7,31 @@ module corelet #(
 )(
     input  clk,
     input  reset,
-    input  [34:0]               inst,  // CHANGED: Extended to 35 bits
-    input  [bw*row-1:0]         data_in,
-    input  [psum_bw*col-1:0]    data_in_acc,
-    output [psum_bw*col-1:0]    data_out,
-    output [psum_bw*col-1:0]    sfp_data_out,
-    output                      ofifo_valid
+    input  [34:0]                inst,   // [34] is mode
+    input  [bw*row-1:0]          data_in,
+    input  [psum_bw*col-1:0]     data_in_acc,
+    output [psum_bw*col-1:0]     data_out,
+    output [psum_bw*col-1:0]     sfp_data_out,
+    output                       ofifo_valid
 );
 
     wire mode = inst[34];
 
-
-    // Note: Both L0 and IFIFO share same data bus. Which one gets used is set by read/write pins.
-
-    // L0 FIFO
+    // --- L0 FIFO ---
     wire [bw*row-1:0] L0_out;
-    wire              L0_o_full; // Unused
-    wire              L0_o_ready; // Unused
+    wire              L0_o_full;
+    wire              L0_o_ready;
     wire L0_wr = inst[2];
     wire L0_rd = inst[3];
     wire [bw*row-1:0] L0_data_in = data_in;
-
-    // Weight IFIFO
-    wire [bw*col-1:0] IFIFO_out;
-    wire IFIFO_wr = inst[5];
-    wire IFIFO_rd = inst[4];
-    wire [bw*col-1:0] IFIFO_data_in = data_in;
-    wire IFIFO_o_full; // Unused
-    wire IFIFO_o_ready; // Unused
-
-    wire [psum_bw*col-1:0] mac_in_n_os;
-    genvar j;
-    generate
-        for (j = 0; j < col; j = j + 1) begin
-            assign mac_in_n_os[psum_bw*(j+1)-1:psum_bw*j] = {{(psum_bw-bw){1'b0}}, IFIFO_out[bw*(j+1)-1:bw*j]};
-        end
-    endgenerate
-
 
     l0 #(
         .row(row),
         .bw(bw)
     ) L0_inst (
         .clk    (clk),
-        .wr     (L0_wr),    // l0_wr
-        .rd     (L0_rd),    // l0 and ififo rd
+        .wr     (L0_wr), 
+        .rd     (L0_rd), 
         .reset  (reset),
         .in     (L0_data_in),
         .out    (L0_out),
@@ -59,8 +39,16 @@ module corelet #(
         .o_ready(L0_o_ready)
     );
 
+    // --- Weight IFIFO (New for Part 3) ---
+    wire [bw*col-1:0] IFIFO_out;
+    wire IFIFO_wr = inst[5];
+    wire IFIFO_rd = inst[4];
+    wire [bw*col-1:0] IFIFO_data_in = data_in; // Shares data bus with L0
+    wire IFIFO_o_full;
+    wire IFIFO_o_ready;
+
     l0 #(
-        .row(col),
+        .row(col), // Note: Depth/Width might differ, reusing l0 module for simplicity
         .bw(bw)
     ) ififo_inst (
         .clk    (clk),
@@ -73,43 +61,57 @@ module corelet #(
         .o_ready(IFIFO_o_ready)
     );
 
-    // MAC_array 
+    // --- Input Muxing Logic ---
+    wire [psum_bw*col-1:0] mac_in_n_os;
+    genvar j;
+    generate
+        for (j = 0; j < col; j = j + 1) begin : north_input_gen
+            // CRITICAL FIX: If mode=0 (WS), force North input to 0. 
+            // If mode=1 (OS), take from IFIFO and zero-pad to 16 bits.
+            assign mac_in_n_os[psum_bw*(j+1)-1:psum_bw*j] = (mode) ? 
+                {{(psum_bw-bw){1'b0}}, IFIFO_out[bw*(j+1)-1:bw*j]} : 
+                {psum_bw{1'b0}};
+        end
+    endgenerate
+
+    // --- MAC Array ---
     wire [psum_bw*col-1:0] mac_out_s;
-    wire [col-1:0]         mac_valid;
+    wire [col-1:0]         mac_valid; // Output valid from array
 
     mac_array #(
-        .bw     (bw),
-        .psum_bw(psum_bw),
-        .col    (col),
-        .row    (row)
+        .bw      (bw),
+        .psum_bw (psum_bw),
+        .col     (col),
+        .row     (row)
     ) mac_array_inst (
-        .clk   (clk),
-        .reset (reset),
-        .out_s (mac_out_s),
-        .in_w  (L0_out),          
-        .in_n  (mac_in_n_os), 
-        .inst_w(inst[1:0]),       // {execute, load}
-        .mode  (mode),        // NEW: Pass mode bit
-        .valid (mac_valid)
+        .clk    (clk),
+        .reset  (reset),
+        .out_s  (mac_out_s),
+        .in_w   (L0_out),          
+        .in_n   (mac_in_n_os), 
+        .inst_w (inst[1:0]),      // {execute, load}
+        .mode   (mode),           // Pass mode to array
+        .valid  (mac_valid)       // Array generates valid signal for OFIFO
     );
 
-    // OFIFO 
+    // --- OFIFO ---
     wire [psum_bw*col-1:0] ofifo_out;
     wire                   ofifo_o_ready;
     wire                   ofifo_o_full;
     wire                   ofifo_o_valid;
 
+    // We use the valid signal from mac_array to trigger OFIFO write
     ofifo #(
-        .col    (col),
-        .bw(psum_bw)
+        .col (col),
+        .bw  (psum_bw)
     ) ofifo_inst (
-        .clk   (clk),
-        .reset (reset),
-        .wr    (mac_valid),
-        .rd    (inst[6]),
-        .in    (mac_out_s),
-        .out   (ofifo_out),
-        .o_full(ofifo_o_full),
+        .clk    (clk),
+        .reset  (reset),
+        .wr     (mac_valid), // Write when data exits array
+        .rd     (inst[6]),
+        .in     (mac_out_s),
+        .out    (ofifo_out),
+        .o_full (ofifo_o_full),
         .o_ready(ofifo_o_ready),
         .o_valid(ofifo_o_valid)
     );
@@ -117,7 +119,7 @@ module corelet #(
     assign data_out    = ofifo_out;
     assign ofifo_valid = ofifo_o_valid;
 
-    // SFP per columns
+    // --- SFP (Special Function Processor) ---
     wire [psum_bw*col-1:0] sfp_out;
 
     genvar i;
@@ -126,9 +128,9 @@ module corelet #(
         sfp #(
             .psum_bw(psum_bw)
         ) sfp_inst (
-            .clk  (clk),
-            .acc  (inst[33]),   // accumulate enable
-            .reset(reset),
+            .clk   (clk),
+            .acc   (inst[33]),    // accumulate enable
+            .reset (reset),
             .data_in   (data_in_acc[psum_bw*(i+1)-1 : psum_bw*i]),
             .data_out  (sfp_out[psum_bw*(i+1)-1 : psum_bw*i])
         );

@@ -355,6 +355,173 @@ initial begin
     #0.5 clk = 1'b1;  
   end
 
+
+
+   // ====================================================================
+// PART 3: OUTPUT STATIONARY VERIFICATION
+// ====================================================================
+$display("############ Starting OS Mode Verification ############");
+
+// 1. Reset and Configure Mode
+#0.5 clk = 1'b0; reset = 1; mode = 1; // ENABLE OS MODE
+#0.5 clk = 1'b1;
+#0.5 clk = 1'b0; reset = 0;
+#0.5 clk = 1'b1;
+
+// 2. Load Activation Data (L0) from activation_os.txt
+x_file = $fopen("activation_os.txt", "r");
+// Skip headers
+x_scan_file = $fscanf(x_file,"%s", captured_data);
+x_scan_file = $fscanf(x_file,"%s", captured_data);
+x_scan_file = $fscanf(x_file,"%s", captured_data);
+
+// Reset SRAM pointers
+WEN_xmem = 1; CEN_xmem = 0; A_xmem = 0; // Write mode
+
+// Read file into XMEM
+// Note: We read slightly more lines to account for the skew depth
+for (t=0; t<30; t=t+1) begin 
+    #0.5 clk = 1'b0;
+    x_scan_file = $fscanf(x_file, "%32b", D_xmem);
+    WEN_xmem = 0; CEN_xmem = 0;
+    if (t>0) A_xmem = A_xmem + 1;
+    #0.5 clk = 1'b1;   
+end
+$fclose(x_file);
+
+// 3. Load Weight Data (IFIFO) from weight_os.txt
+// Strategy: We will load weights into XMEM first (high addresses), then move to IFIFO
+// Or: Since IFIFO is memory mapped via L0 interface logic in some designs, 
+// let's stick to your pattern: Load XMEM -> Push to FIFO.
+
+w_file = $fopen("weight_os.txt", "r");
+// Skip headers
+w_scan_file = $fscanf(w_file,"%s", captured_data);
+w_scan_file = $fscanf(w_file,"%s", captured_data);
+w_scan_file = $fscanf(w_file,"%s", captured_data);
+
+// Reset XMEM address for weights (use offset 1024 like before)
+#0.5 clk = 1'b0; 
+WEN_xmem = 1; CEN_xmem = 1; 
+#0.5 clk = 1'b1;
+
+A_xmem = 11'b10000000000; // Offset 1024
+
+for (t=0; t<30; t=t+1) begin  
+    #0.5 clk = 1'b0;
+    w_scan_file = $fscanf(w_file,"%32b", D_xmem);
+    WEN_xmem = 0; CEN_xmem = 0;
+    if (t>0) A_xmem = A_xmem + 1; 
+    #0.5 clk = 1'b1;  
+end
+$fclose(w_file);
+
+// 4. Move Data to FIFOs
+
+// A. Fill IFIFO (Weights)
+// Note: In your corelet, ififo_wr is inst[5].
+#0.5 clk = 1'b0;
+ififo_wr = 1; // Enable IFIFO write
+l0_rd = 0;    // Ensure L0 read is off
+WEN_xmem = 1; // Read XMEM
+CEN_xmem = 0;
+A_xmem = 11'b10000000000; // Start of weights
+#0.5 clk = 1'b1;
+
+for (t=0; t<30; t=t+1) begin
+    #0.5 clk = 1'b0;
+    // Just clocking data from XMEM into IFIFO
+    if (t>0) A_xmem = A_xmem + 1; 
+    #0.5 clk = 1'b1; 
+end
+
+#0.5 clk = 1'b0; ififo_wr = 0; #0.5 clk = 1'b1; // Stop IFIFO write
+
+// B. Fill L0 (Activations)
+#0.5 clk = 1'b0;
+l0_wr = 1;    // Enable L0 write
+WEN_xmem = 1; // Read XMEM
+CEN_xmem = 0;
+A_xmem = 0;   // Start of activations
+#0.5 clk = 1'b1;
+
+for (t=0; t<30; t=t+1) begin
+    #0.5 clk = 1'b0;
+    if (t>0) A_xmem = A_xmem + 1; 
+    #0.5 clk = 1'b1; 
+end
+
+#0.5 clk = 1'b0; l0_wr = 0; #0.5 clk = 1'b1; // Stop L0 write
+
+// 5. EXECUTE (OS Mode)
+// Enable L0 read (activations flow West->East)
+// Enable IFIFO read (weights flow North->South)
+// Enable Execute (PEs multiply and accumulate)
+
+#0.5 clk = 1'b0;
+l0_rd = 1;
+ififo_rd = 1;
+execute = 1;
+#0.5 clk = 1'b1;
+
+// Run for enough cycles for the wave to pass through
+for (t=0; t<40; t=t+1) begin
+    #0.5 clk = 1'b0; #0.5 clk = 1'b1; 
+end
+
+// Stop Execution
+#0.5 clk = 1'b0;
+l0_rd = 0; ififo_rd = 0; execute = 0;
+#0.5 clk = 1'b1;
+
+
+// 6. DRAIN RESULTS (The Trick)
+// The Psums are stuck in the PEs.
+// To get them out, we switch to WS mode (mode=0).
+// In WS mode, the PEs shift their "psum" (which is now our result) South.
+
+#0.5 clk = 1'b0; mode = 0; #0.5 clk = 1'b1; // Switch to WS mode
+
+// Enable OFIFO Read to capture the draining data
+#0.5 clk = 1'b0;
+ofifo_rd = 1; // Or just rely on valid signal? 
+              // Usually valid signal from array writes OFIFO automatically.
+              // We just need to clock the array so data moves.
+execute = 1;  // Execute signal pushes data South in WS mode
+#0.5 clk = 1'b1;
+
+// We need to capture the output into PMEM or check against file
+// Let's verify against out_os.txt
+out_file = $fopen("out_os.txt", "r");
+// Skip headers
+out_scan_file = $fscanf(out_file,"%s", captured_data);
+out_scan_file = $fscanf(out_file,"%s", captured_data);
+out_scan_file = $fscanf(out_file,"%s", captured_data);
+
+error = 0;
+
+// It takes ROW cycles for the first row to exit, then ROW more for the last.
+// We wait for the valid data.
+
+for (t=0; t<20; t=t+1) begin
+    #0.5 clk = 1'b0; #0.5 clk = 1'b1;
+    
+    // Check OFIFO Valid (assuming sfp_out connects to OFIFO output)
+    if (ofifo_valid) begin
+        out_scan_file = $fscanf(out_file, "%128b", answer);
+        if (sfp_out == answer) begin
+            $display("OS Check: Row Match at time %t", $time);
+        end else begin
+            $display("OS Check: Mismatch!");
+            $display("Expected: %h", answer);
+            $display("Got:      %h", sfp_out);
+            error = 1;
+        end
+    end
+end
+
+if (error == 0) $display("######## OS MODE PASSED ########");
+
   #10 $finish;
 
 end
