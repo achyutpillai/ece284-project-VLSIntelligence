@@ -258,7 +258,7 @@ initial begin
 
                 for (i=0; i<(mode ? col*2 : col); i=i+1) begin
                     #0.5 clk = 1'b0; 
-                    if (i>0) A_xmem = A_xmem + 1; 
+                    A_xmem = A_xmem + 1; 
                     #0.5 clk = 1'b1; 
                 end
 
@@ -289,7 +289,7 @@ initial begin
 
                 for (i=0; i<len_nij; i=i+1) begin
                     #0.5 clk = 1'b0; 
-                    if (i>0) A_xmem = A_xmem + 1; 
+                    A_xmem = A_xmem + 1; 
                     #0.5 clk = 1'b1; 
                 end
 
@@ -352,9 +352,11 @@ initial begin
                 if (i>0) begin
                     out_scan_file = $fscanf(out_file,"%128b", answer); 
                     if (sfp_out == answer) begin
-                        $display("OT%0d Data %2d matched!", ot_idx, i);
+                        $display("Output Tile %0d Data %2d matched!", ot_idx, i);
                     end else begin
-                        $display("OT%0d Data %2d ERROR!! SFP: %h Exp: %h", ot_idx, i, sfp_out, answer);
+                        $display("Output Tile %0d Data %2d ERROR!!", ot_idx, i);
+                        $display("sfp_out: %128b", sfp_out);
+                        $display("answer : %128b", answer);
                         error = 1;
                     end
                 end
