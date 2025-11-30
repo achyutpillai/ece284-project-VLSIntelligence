@@ -259,9 +259,13 @@ initial begin
                 // Kernel from xmem to L0
                 WEN_xmem = 1;
                 CEN_xmem = 0;
-                l0_wr = 1;
+                l0_wr = 0;
                 l0_rd = 0;
                 A_xmem = 11'b10000000000;
+
+                #0.5 clk = 1'b0;
+                #0.5 clk = 1'b1;
+                l0_wr = 1;
 
                 for (i=0; i<(mode ? col*2 : col); i=i+1) begin
                     #0.5 clk = 1'b0; 

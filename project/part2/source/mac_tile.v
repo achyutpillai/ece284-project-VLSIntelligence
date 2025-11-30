@@ -51,21 +51,14 @@ wire signed [2:0] act1_s = {1'b0, a_q[3:2]};     // high 2 bits with 0 pad
 wire signed [bw-1:0] wgt0_s  = w0_q;  // 4-bit signed weight
 wire signed [bw-1:0] wgt1_s  = w1_q;  // 4-bit signed weight
 
-// 3b x 4b -> 7b signed products
-wire signed [6:0] prod0_s = act0_s * wgt0_s;
-wire signed [6:0] prod1_s = act1_s * wgt1_s;
-
-// sign-extend up to psum_bw
-wire signed [psum_bw-1:0] prod0_ext =
-    {{(psum_bw-7){prod0_s[6]}}, prod0_s};
-
-wire signed [psum_bw-1:0] prod1_ext =
-    {{(psum_bw-7){prod1_s[6]}}, prod1_s};
+// 3b x 4b -> 7b signed products // calculate as psum_bw to avoid overflow and extend sign
+wire signed [psum_bw-1:0] prod0_s = act0_s * wgt0_s;
+wire signed [psum_bw-1:0] prod1_s = act1_s * wgt1_s;
 
 wire signed [psum_bw-1:0] c_q_s = c_q;
 
 wire signed [psum_bw-1:0] simd_mac_out =
-    c_q_s + prod0_ext + prod1_ext;
+    c_q_s + prod0_s + prod1_s;
 
 assign out_s = mode_2b ? simd_mac_out : mac_out;
 
