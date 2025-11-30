@@ -27,14 +27,16 @@ input                mode_2b;  // new mode select
 
 reg  [1:0]           inst_q;
 reg  [bw-1:0]        a_q;
-reg  [bw-1:0]        b_q;
+reg  [bw-1:0]        w0_q; // weight 0
+reg  [bw-1:0]        w1_q; // weight 1 for 2-bit mode
 reg  [psum_bw-1:0]   c_q;
 wire [psum_bw-1:0]   mac_out;
 reg                  load_ready_q;
+reg                  w_load_cnt;
 
 mac #(.bw(bw), .psum_bw(psum_bw)) mac_instance (
     .a(a_q), 
-    .b(b_q),
+    .b(w0_q),
     .c(c_q),
     .out(mac_out)
 );
@@ -43,21 +45,22 @@ assign out_e  = a_q;
 assign inst_e = inst_q;
 
 
-wire signed [1:0] act0_s = a_q[1:0];     // low  2 bits
-wire signed [1:0] act1_s = a_q[3:2];     // high 2 bits
+wire signed [2:0] act0_s = {1'b0, a_q[1:0]};     // low 2 bits with 0 pad
+wire signed [2:0] act1_s = {1'b0, a_q[3:2]};     // high 2 bits with 0 pad
 
-wire signed [3:0] wgt_s  = b_q;  // 4-bit signed weight
+wire signed [bw-1:0] wgt0_s  = w0_q;  // 4-bit signed weight
+wire signed [bw-1:0] wgt1_s  = w1_q;  // 4-bit signed weight
 
-// 2b x 4b -> 6b signed products
-wire signed [5:0] prod0_s = act0_s * wgt_s;
-wire signed [5:0] prod1_s = act1_s * wgt_s;
+// 3b x 4b -> 7b signed products
+wire signed [6:0] prod0_s = act0_s * wgt0_s;
+wire signed [6:0] prod1_s = act1_s * wgt1_s;
 
 // sign-extend up to psum_bw
 wire signed [psum_bw-1:0] prod0_ext =
-    {{(psum_bw-6){prod0_s[5]}}, prod0_s};
+    {{(psum_bw-7){prod0_s[6]}}, prod0_s};
 
 wire signed [psum_bw-1:0] prod1_ext =
-    {{(psum_bw-6){prod1_s[5]}}, prod1_s};
+    {{(psum_bw-7){prod1_s[6]}}, prod1_s};
 
 wire signed [psum_bw-1:0] c_q_s = c_q;
 
@@ -71,8 +74,10 @@ always @ (posedge clk) begin
         inst_q       <= 0;
         load_ready_q <= 1'b1;
         a_q          <= 0;
-        b_q          <= 0;
+        w0_q         <= 0;
+        w1_q         <= 0;
         c_q          <= 0;
+        w_load_cnt   <= 0;
     end
     else begin
         inst_q[1] <= inst_w[1];
@@ -83,8 +88,21 @@ always @ (posedge clk) begin
         end
 
         if (inst_w[0] & load_ready_q) begin
-            b_q          <= in_w;
-            load_ready_q <= 1'b0;
+            if (mode_2b) begin
+                // SIMD 2-bit mode: Load w0 then w1
+                if (w_load_cnt == 0) begin
+                    w0_q       <= in_w;
+                    w_load_cnt <= 1'b1;
+                end else begin
+                    w1_q         <= in_w;
+                    w_load_cnt   <= 0;
+                    load_ready_q <= 1'b0;
+                end
+            end else begin
+                // Vanilla 4-bit mode: Load single weight
+                w0_q         <= in_w;
+                load_ready_q <= 1'b0;
+            end
         end
 
         if (load_ready_q == 1'b0) begin
