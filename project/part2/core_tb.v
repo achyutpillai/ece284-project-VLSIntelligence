@@ -247,7 +247,7 @@ initial begin
             l0_rd = 0;
             A_xmem = 11'b10000000000;
 
-            for (i=0; i<col; i=i+1) begin
+            for (i=0; i<(mode ? col*2 : col); i=i+1) begin
                 #0.5 clk = 1'b0;
                 if (t>0) A_xmem = A_xmem + 1; 
                 #0.5 clk = 1'b1; 
@@ -262,7 +262,7 @@ initial begin
             l0_rd = 1;
             #0.5 clk = 1'b1;
 
-            for (i=0; i<col; i=i+1) begin
+            for (i=0; i<(mode ? col*2 : col); i=i+1) begin
                 #0.5 clk = 1'b0;
                 load = 1;
                 #0.5 clk = 1'b1; 
