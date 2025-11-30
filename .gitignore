@@ -45,6 +45,7 @@ temp/
 *.zip
 *.tgz
 *.bak
+*.tar
 
 # Misc
 coverage/
