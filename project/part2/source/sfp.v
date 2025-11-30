@@ -22,6 +22,7 @@ always @(posedge clk) begin
         
 end
 
-assign data_out = psum_q[psum_bw-1] ? 0 : psum_q;
+// ReLU operation
+assign data_out = psum_q[psum_bw-1] ? 0 : psum_q; // 0 if MSB is 1 (negative)
 
 endmodule
