@@ -127,32 +127,29 @@ initial begin
     $dumpfile("core_tb.vcd");
     $dumpvars(0,core_tb);
 
+    $display("###################################################");
+    $display("############## STARTING PART 2 CHECK ##############");
+    $display("###################################################");
+
     // --- LOOP TWICE: First for 4b, then for 2b ---
     for (loop_count = 0; loop_count < 2; loop_count = loop_count + 1) begin
-
-        // -------------------------------------------------------
-        // SETUP PHASE: Define Prefixes, Mode, and Tile Count
-        // -------------------------------------------------------
+        // --- SETUP PHASE ---
         if (loop_count == 0) begin
-            $display("###################################################");
-            $display("### STARTING PART 2 CHECK: 4-BIT MODE (Mode=0) ###");
-            $display("###################################################");
-            mode = 0; 
+            $display("### STARTING 4-BIT MODE CHECK (Mode=0) ###");
+            mode = 0; max_ot = 1; // 4-bit mode: only 1 output tile (8 channels)
             prefix = "4b_";
-            max_ot = 1; // 4-bit mode: only 1 output tile (8 channels)
         end else begin
-            $display("###################################################");
-            $display("### STARTING PART 2 CHECK: 2-BIT MODE (Mode=1) ###");
-            $display("###################################################");
-            mode = 1; 
+            $display("### STARTING 2-BIT MODE CHECK (Mode=1) ###");
+            mode = 1; max_ot = 2; // 2-bit mode: 2 output tiles (16 channels)
             prefix = "2b_";
-            max_ot = 2; // 2-bit mode: 2 output tiles (16 channels)
         end
 
-        // --- OUTPUT TILE LOOP (New) ---
+        // --- OUTPUT TILE LOOP ---
         for (ot_idx = 0; ot_idx < max_ot; ot_idx = ot_idx + 1) begin
             
             $display(">>> Processing Output Tile %0d <<<", ot_idx);
+
+            A_pmem = 0;
 
             // Dynamically construct filenames
             $sformat(x_file_name,   "%0s%0sactivation_tile0.txt", data_dir, prefix);
