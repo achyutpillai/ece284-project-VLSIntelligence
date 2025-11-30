@@ -278,9 +278,10 @@ initial begin
                 l0_rd = 1;
                 #0.5 clk = 1'b1;
                 $display("DEBUG: Loading weights from L0 into MAC tiles...");
-                for (i=0; i<(mode ? col*2 : col); i=i+1) begin
+                for (i=0; i<(mode ? col*2 + row + 2 : col + row+ 2); i=i+1) begin
                     #0.5 clk = 1'b0;
                     load = 1;
+                    if (i >= (mode ? col*2 : col)) l0_rd = 0;
                     #0.5 clk = 1'b1; 
                 end
 
