@@ -1,26 +1,3 @@
-//Core module contains corelet, xmem, and pmem 
-// clk 
-// reset - reset on high
-// inst[34:0] - instructions 
-//  34 - mode (2b or 4b activation)
-//  33 - accumulate 
-//  32 - pmem chip enable
-//  31 - pmem write enable
-//  30:20 - pmem address
-//  19 - xmem chip enable
-//  18 - xmem write enable
-//  17:7 - xmem address
-//  6 - ofifo_rd
-//  5 - ififo_wr
-//  4 - ififo_rd
-//  3 - l0_rd
-//  2 - l0_wr
-//  1 - execute
-//  0 - load
-// D_xmem - data to write into x memory
-//ofifo_valid - ofifo_valid signal
-// sfp_out - sfp output signal
-
 module core #(
     parameter row = 8,
     parameter col = 8,
@@ -44,6 +21,10 @@ assign corelet_data_in_acc = pmem_data_out;
 assign corelet_data_in = xmem_data_out;
 assign sfp_out = corelet_sfp_data_out;
 
+/////////// added for 2-bit mode ////////////
+wire mode_2b;
+assign mode_2b = inst[34];
+
 corelet #(
     .row(row),
     .col(col),
@@ -57,7 +38,8 @@ corelet #(
     .data_in_acc(corelet_data_in_acc),
     .data_out(corelet_data_out),
     .sfp_data_out(corelet_sfp_data_out),
-    .ofifo_valid(ofifo_valid)
+    .ofifo_valid(ofifo_valid),
+    .mode_2b(mode_2b)
 );
 
 wire xmem_chip_en;
@@ -68,20 +50,24 @@ wire [31:0] xmem_data_out;
 
 assign xmem_chip_en = inst[19];
 assign xmem_wr_en = inst[18];
+/////TODO: TEST HERE/////
 assign xmem_addr_in = inst[17:7];
+
+// reconstruct address for XMEM ignoring mode bit
+// assign xmem_addr_in = {inst[17:9], inst[7]};  // {A_xmem[10:2], A_xmem[0]}
 assign xmem_data_in = D_xmem;
 
 sram_32b_w2048 #(
     .num(2048),
     .width(bw * row)
 ) Xmemory_inst (
-        .CLK(clk),
+    .CLK(clk),
     .D(xmem_data_in),
     .Q(xmem_data_out),
     .CEN(xmem_chip_en),
     .WEN(xmem_wr_en),
     .A(xmem_addr_in)
-    );
+);
 
 wire [psum_bw*col-1:0] pmem_data_in;
 wire [psum_bw*col-1:0] pmem_data_out;
@@ -99,7 +85,7 @@ sram_32b_w2048 #(
     .num(2048),
     .width(psum_bw*col)
 ) Pmemory_inst (
-        .CLK(clk),
+    .CLK(clk),
     .D(pmem_data_in),
     .Q(pmem_data_out),
     .CEN(pmem_chip_en),

@@ -9,7 +9,7 @@ module sram_32b_w2048 (CLK, D, Q, CEN, WEN, A);
   input  [10:0] A;
   output [width-1:0] Q;
   parameter num = 2048;
-  parameter width = 32;
+  parameter width = 128;
 
   reg [width-1:0] memory [num-1:0];
   reg [10:0] add_q;

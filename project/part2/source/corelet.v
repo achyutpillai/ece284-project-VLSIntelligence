@@ -10,6 +10,7 @@ module corelet #(
     input  [34:0]               inst,
     input  [bw*row-1:0]         data_in,
     input  [psum_bw*col-1:0]    data_in_acc,
+    input                       mode_2b,
     output [psum_bw*col-1:0]    data_out,
     output [psum_bw*col-1:0]    sfp_data_out,
     output                      ofifo_valid
@@ -34,7 +35,17 @@ module corelet #(
         .o_ready(L0_o_ready)
     );
 
-    // MAC_array 
+    // fix: delay inst[1:0] by 1 cycle to match l0 latency
+    // L0 has rd_en registered, so data appears 1 cycle after rd=1
+    reg [1:0] inst_w_delayed;
+    always @(posedge clk) begin
+        if (reset)
+            inst_w_delayed <= 2'b00;
+        else
+            inst_w_delayed <= inst[1:0];
+    end
+
+    // mac_array 
     wire [psum_bw*col-1:0] mac_out_s;
     wire [col-1:0]         mac_valid;
 
@@ -47,11 +58,11 @@ module corelet #(
         .clk   (clk),
         .reset (reset),
         .out_s (mac_out_s),
-        .in_w  (L0_out),          // weights and inputs from L0
-        .in_n  ({psum_bw*col{1'b0}}), // unused 
-        .inst_w(inst[1:0]),       // {execute, load}
+        .in_w  (L0_out),
+        .in_n  ({psum_bw*col{1'b0}}),
+        .inst_w(inst_w_delayed),      //delayed
         .valid (mac_valid),
-        .mode_2b(inst[34])
+        .mode_2b(mode_2b)
     );
 
     // OFIFO 
@@ -82,7 +93,7 @@ module corelet #(
     wire [psum_bw*col-1:0] sfp_out;
 
     genvar i;
-	generate
+    generate
     for (i = 0; i < col; i = i + 1) begin : sfp_num
         sfp #(
             .psum_bw(psum_bw)
@@ -94,7 +105,7 @@ module corelet #(
             .data_out  (sfp_out[psum_bw*(i+1)-1 : psum_bw*i])
         );
     end
-	endgenerate
+    endgenerate
 
     assign sfp_data_out = sfp_out;
 
