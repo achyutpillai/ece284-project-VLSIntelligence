@@ -143,6 +143,7 @@ initial begin
             mode = 1; max_ot = 2; // 2-bit mode: 2 output tiles (16 channels)
             prefix = "2b_";
         end
+        $display("DEBUG: loop_count=%0d, mode=%0d, max_ot=%0d", loop_count, mode, max_ot);
 
         // --- OUTPUT TILE LOOP ---
         for (ot_idx = 0; ot_idx < max_ot; ot_idx = ot_idx + 1) begin
@@ -162,6 +163,8 @@ initial begin
                 $sformat(out_file_name, "%0s%0sout_otile%0d.txt", data_dir, prefix, ot_idx);
 
             $display("Loading Activation File: %0s", x_file_name);
+            $display("DEBUG: acc_file   = %0s", acc_file_name);
+            $display("DEBUG: out_file   = %0s", out_file_name);
             
             x_file = $fopen(x_file_name, "r");
             if (x_file == 0) begin $display("ERROR: Could not open file %0s", x_file_name); $finish; end
@@ -187,12 +190,16 @@ initial begin
             #0.5 clk = 1'b1;
 
             // Activation to xmem 
+            $display("DEBUG: Writing activations to XMEM...");
             for (t=0; t<len_nij; t=t+1) begin  
                 #0.5 clk = 1'b0;
                 x_scan_file = $fscanf(x_file, "%32b", D_xmem);
                 WEN_xmem = 0;
                 CEN_xmem = 0;
                 if (t>0) A_xmem = A_xmem + 1;
+                // DEBUG: show first few activations
+                if (t < 12)
+                    $display("  Act[%0d] = %032b (A_xmem=%0d)", t, D_xmem, A_xmem);
                 #0.5 clk = 1'b1;   
             end
             #0.5 clk = 1'b0;  WEN_xmem = 1;  CEN_xmem = 1; A_xmem = 0;
@@ -205,6 +212,8 @@ initial begin
                 
                 // Generate Weight Filename dynamically with otile index
                 $sformat(w_file_name, "%0s%0sweight_itile0_otile%0d_kij%0d.txt", data_dir, prefix, ot_idx, kij);
+                $display("DEBUG: ---- KIJ=%0d, mode=%0d, otile=%0d ----", kij, mode, ot_idx);
+                $display("DEBUG: Opening weight file: %0s", w_file_name);
 
                 w_file = $fopen(w_file_name, "r");
                 if (w_file == 0) begin 
@@ -234,6 +243,7 @@ initial begin
 
                 // Kernel to xmem (Supports SIMD double load)
                 A_xmem = 11'b10000000000;
+                $display("DEBUG: Writing weights to XMEM (start A_xmem=%0d, count=%0d)", A_xmem, (mode ? col*2 : col));
                 for (t=0; t<(mode ? col*2 : col); t=t+1) begin  
                     #0.5 clk = 1'b0;
                     w_scan_file = $fscanf(w_file,"%32b", D_xmem);
@@ -267,7 +277,7 @@ initial begin
                 #0.5 clk = 1'b0;
                 l0_rd = 1;
                 #0.5 clk = 1'b1;
-
+                $display("DEBUG: Loading weights from L0 into MAC tiles...");
                 for (i=0; i<(mode ? col*2 : col); i=i+1) begin
                     #0.5 clk = 1'b0;
                     load = 1;
@@ -283,7 +293,7 @@ initial begin
                 l0_wr = 1;
                 l0_rd = 0;
                 A_xmem = 0;
-
+                $display("DEBUG: Streaming activations XMEM->L0 (%0d words)", len_nij);
                 for (i=0; i<len_nij; i=i+1) begin
                     #0.5 clk = 1'b0; 
                     A_xmem = A_xmem + 1; 
@@ -298,7 +308,7 @@ initial begin
                 #0.5 clk = 1'b0;
                 l0_rd = 1;
                 #0.5 clk = 1'b1;
-
+                $display("DEBUG: Starting execute phase (len_nij+row+col=%0d)", len_nij+row+col);
                 for (i=0; i<len_nij+row+col; i=i+1) begin
                     #0.5 clk = 1'b0;
                     execute = 1;
@@ -318,10 +328,13 @@ initial begin
                 WEN_pmem = 0;
                 CEN_pmem = 0;
                 #0.5 clk = 1'b1;
-
+                $display("DEBUG: Dumping OFIFO -> PMEM (starting A_pmem=%0d)", A_pmem);
                 for (t=0; t<len_nij; t=t+1) begin  
                     #0.5 clk = 1'b0;
                     A_pmem = A_pmem + 1;
+                    if (t < 4)
+                        $display("  OFIFO->PMEM step t=%0d, A_pmem=%0d, ofifo_valid=%b", 
+                                 t, A_pmem, ofifo_valid);
                     #0.5 clk = 1'b1;  
                 end
 
@@ -369,6 +382,9 @@ initial begin
                         CEN_pmem = 0;
                         WEN_pmem = 1;
                         acc_scan_file = $fscanf(acc_file,"%11b", A_pmem);
+                        // DEBUG: see which addresses are used for accumulation
+                        $display("  ACC PHASE: i=%0d j=%0d A_pmem(from file)=%0d", 
+                                 i, j, A_pmem);
                     end else begin
                         CEN_pmem = 1;
                         WEN_pmem = 1;

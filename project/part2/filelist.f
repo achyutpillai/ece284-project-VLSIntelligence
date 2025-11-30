@@ -1,12 +1,13 @@
-./core_tb_part2.v
+./core_tb.v
 ./source/core.v
+./source/corelet.v
 ./source/fifo_depth64.v
 ./source/fifo_mux_16_1.v
 ./source/fifo_mux_2_1.v
 ./source/fifo_mux_8_1.v
 ./source/l0.v
 ./source/mac.v
-./source/mac_array.v
+./source/mac_array_simd.v
 ./source/mac_row.v
 ./source/mac_tile.v
 ./source/ofifo.v

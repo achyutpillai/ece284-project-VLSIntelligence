@@ -6,7 +6,7 @@ module core #(
 )(
     input clk,
     input reset,    
-    input [33:0] inst,
+    input [34:0] inst,
     input [bw*row-1:0] D_xmem,
     output ofifo_valid,
     output [psum_bw*col-1:0] sfp_out
@@ -23,7 +23,7 @@ assign sfp_out = corelet_sfp_data_out;
 
 /////////// added for 2-bit mode ////////////
 wire mode_2b;
-assign mode_2b = inst[8];
+assign mode_2b = inst[34];
 
 corelet #(
     .row(row),
@@ -51,10 +51,10 @@ wire [31:0] xmem_data_out;
 assign xmem_chip_en = inst[19];
 assign xmem_wr_en = inst[18];
 /////TODO: TEST HERE/////
-// assign xmem_addr_in = inst[17:7];
+assign xmem_addr_in = inst[17:7];
 
 // reconstruct address for XMEM ignoring mode bit
-assign xmem_addr_in = {inst[17:9], inst[7]};  // {A_xmem[10:2], A_xmem[0]}
+// assign xmem_addr_in = {inst[17:9], inst[7]};  // {A_xmem[10:2], A_xmem[0]}
 assign xmem_data_in = D_xmem;
 
 sram_32b_w2048 #(

@@ -7,7 +7,7 @@ module corelet #(
 )(
     input  clk,
     input  reset,
-    input  [33:0]               inst,
+    input  [34:0]               inst,
     input  [bw*row-1:0]         data_in,
     input  [psum_bw*col-1:0]    data_in_acc,
     input                       mode_2b,
