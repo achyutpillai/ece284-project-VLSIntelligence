@@ -60,7 +60,7 @@ module corelet #(
         .out_s (mac_out_s),
         .in_w  (L0_out),
         .in_n  ({psum_bw*col{1'b0}}),
-        .inst_w(inst[1:0]) //.inst_w(inst_w_delayed),      //works without delay
+        .inst_w(inst[1:0]), //.inst_w(inst_w_delayed),      //works without delay
         .valid (mac_valid),
         .mode_2b(mode_2b)
     );
